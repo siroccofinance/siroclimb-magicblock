@@ -32,8 +32,8 @@ const shortAddr = a => a.slice(0, 4) + '…' + a.slice(-4);
 // ── state
 const assets = api.listAssets();
 const byId = Object.fromEntries(assets.map(a => [a.id, a]));
-const C = { mode: store.get('mode', 'solo'), asset: store.get('asset', 'BTC'), side: store.get('side', 'long'), stake: store.get('stake', 25) };
-if (!byId[C.asset]) C.asset = 'BTC';
+const C = { mode: store.get('mode', 'solo'), asset: store.get('asset', assets[0].id), side: store.get('side', 'long'), stake: store.get('stake', 25) };
+if (!byId[C.asset]) C.asset = assets[0].id;
 let screen = body.dataset.screen || 'intro', round = api.currentRound(), busy = false;
 let run = null, upd = null, shownStep = 0, ended = null, roundTimer = 0;
 const D = { value: 0, pnl: 0, pct: 0, danger: 0 };           // displayed values, eased toward the feed every frame
@@ -486,7 +486,7 @@ $('#share').onclick = async () => {
 };
 
 // ── sparkline: last 60 s, scrolls smoothly, entry line while playing
-const spark = { el: $('#spark'), entry: 0, asset: 'BTC' };
+const spark = { el: $('#spark'), entry: 0, asset: assets[0].id };
 function drawSpark() {
   const c = spark.el; if (screen !== 'game' || !c.offsetWidth) return;
   const w = c.offsetWidth, h = c.offsetHeight, r = Math.min(devicePixelRatio || 1, 2);
