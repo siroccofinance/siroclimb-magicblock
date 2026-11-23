@@ -181,11 +181,27 @@ function bindSeg(el, key, parse = v => v) {
 }
 bindSeg($('#mode'), 'mode'); bindSeg($('#side'), 'side'); bindSeg($('#stake'), 'stake', Number);
 const press = (el, v) => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+// sliding thumb under the picked option; flashes a sheen when the pick changes
+function thumb(el) {
+  let t = el.querySelector('.seg__thumb');
+  if (!t) { t = document.createElement('i'); t.className = 'seg__thumb'; t.setAttribute('aria-hidden', 'true'); el.prepend(t); }
+  const b = el.querySelector('button[aria-pressed="true"]');
+  el.classList.toggle('has-thumb', !!b); if (!b || !b.offsetWidth) return;
+  if (el.dataset.v && el.dataset.v !== b.dataset.v) { el.classList.remove('is-flash'); void el.offsetWidth; el.classList.add('is-flash'); }
+  el.dataset.v = b.dataset.v;
+  t.style.width = b.offsetWidth + 'px'; t.style.transform = `translateX(${b.offsetLeft}px)`;
+  if (!el.classList.contains('is-ready')) requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('is-ready')));
+}
+const segs = ['#mode', '#side', '#stake'].map(s => $(s));
+const thumbs = () => segs.forEach(thumb);
+if (window.ResizeObserver) { const ro = new ResizeObserver(thumbs); segs.forEach(s => s.querySelectorAll('button').forEach(b => ro.observe(b))); }
+document.fonts && document.fonts.ready.then(thumbs);
 
 function renderLobby() {
   body.dataset.mode = C.mode;
   const joined = round && round.joined;
   press($('#mode'), C.mode); press($('#side'), C.side); press($('#stake'), C.stake);
+  body.dataset.side = C.side; thumbs();
   $('#mode').querySelectorAll('button').forEach(b => { b.disabled = !!joined && b.dataset.v !== 'round'; });
   $('#side').querySelectorAll('button').forEach(b => { b.disabled = !!joined; });
   const sel = C.mode === 'round' ? round.assetId : C.asset;
@@ -272,7 +288,7 @@ function enterGame(r) {
   if (G) { G.steps = []; G.dangerTo = 0; G.end = null; G.go = (performance.now() - G.t0) / 1000; }
   if (STAIRS) startTrack(r);
   const a = byId[r.assetId];
-  $('#hT').textContent = a.ticker; $('#hSide').textContent = r.side === 'long' ? 'Long' : 'Short';
+  $('#hT').textContent = a.ticker; $('#hSide').textContent = r.side === 'long' ? 'Long' : 'Short'; $('#hSide').className = 'pill is-' + r.side;
   buildLadder(r.ladder); rungs[0].classList.add('is-now');
   $('#rank').textContent = '';
   spark.entry = r.entryPrice; spark.asset = r.assetId;
@@ -393,14 +409,19 @@ $('#again').onclick = () => {
     requestAnimationFrame(() => wash.classList.remove('is-on'));
   }, 430);
 };
-$('#share').onclick = async () => {
+$('#share').onclick = () => {
   if (!ended) return;
-  const a = byId[run.assetId], r = ended;
-  const text = r.status === 'busted' ? `My coin fell at ${levTxt(r.maxLeverage)} on ${a.ticker}. Back on the stairs. Siroclimb`
-    : `Climbed to ${levTxt(r.maxLeverage)} on ${a.ticker} and cashed out ${pct(r.pnlPct)}. Siroclimb`;
-  const url = location.origin + location.pathname.replace(/play\.html$/, '');
-  try { if (navigator.share) await navigator.share({ text, url }); else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Result copied, paste it anywhere'); } }
-  catch {}
+  const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long';
+  const rank = round && r.rank ? ` and finished ${ord(r.rank)} in the round` : '';
+  const text = r.status === 'busted'
+    ? `My coin fell off the stairs at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker}${rank}. Rematch incoming 🪙`
+    : r.pnl > 0.005 ? `Climbed to ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} and cashed out ${pct(r.pnlPct)}${rank} 🪙📈\n\nCan you climb higher on Siroclimb?`
+    : `Cashed out at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} before the stairs gave way${rank} 🪙\n\nYour turn on Siroclimb`;
+  const url = location.origin + location.pathname.replace(/(play|index)\.html$/, '');
+  const href = 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
+  const w = window.open(href, '_blank', 'noopener,noreferrer');
+  if (!w) location.href = href;   // popup blocked: go there in this tab
+  sound.tick();
 };
 
 // ── sparkline: last 60 s, scrolls smoothly, entry line while playing
