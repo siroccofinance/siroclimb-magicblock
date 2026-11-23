@@ -386,3 +386,71 @@ body[data-mode="round"] .standings { display: grid; }
   .screen, body .screen { transition: opacity .2s linear, visibility 0s !important; transform: none !important; filter: none !important; }
   .ladder li.is-hit, .safety.is-hot .safety__bar i, .balance.is-bump { animation: none; }
 }
+
+/* ───────── buttons v2: sliding thumb, glass, long green, short red ───────── */
+:root {
+  --long: #22c55e; --long-hi: #4ade80; --long-lo: #15803d;
+  --short: #ef4444; --short-hi: #f87171; --short-lo: #b91c1c;
+}
+.seg { position: relative; isolation: isolate; border-radius: 14px; padding: 4px; gap: 2px;
+  background: linear-gradient(180deg, rgba(43, 20, 10, .5), rgba(43, 20, 10, .36));
+  border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 12px 30px -18px rgba(43, 20, 10, .7); }
+.seg button { position: relative; z-index: 1; height: 40px; border-radius: 10px; transition: color .3s var(--ease), background .25s var(--ease), transform .15s var(--ease); }
+.seg button:active:not(:disabled) { transform: scale(.96); }
+.seg__thumb { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 10px; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, #fff 0%, #f6eee6 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 6px 16px -6px rgba(43, 20, 10, .55); overflow: hidden;
+  transition: background .35s var(--ease), box-shadow .35s var(--ease), opacity .2s var(--ease); }
+.seg.is-ready .seg__thumb { transition: transform .45s var(--ease-out), width .45s var(--ease-out), background .35s var(--ease), box-shadow .35s var(--ease), opacity .2s var(--ease); }
+.seg.has-thumb .seg__thumb { opacity: 1; }
+.seg:not(.seg--tabs) button[aria-pressed="true"] { background: transparent; }
+/* moving sheen across the thumb on every pick */
+.seg__thumb::after { content: ""; position: absolute; inset: 0; transform: translateX(-120%);
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .7) 50%, transparent 70%); }
+.seg.is-flash .seg__thumb::after { animation: sheen .8s var(--ease-out); }
+@keyframes sheen { to { transform: translateX(120%); } }
+
+/* direction: green for long, red for short, with a coloured glow on the scene */
+#side { --c: var(--long); --hi: var(--long-hi); --lo: var(--long-lo); }
+#side[data-v="short"] { --c: var(--short); --hi: var(--short-hi); --lo: var(--short-lo); }
+#side .seg__thumb { background: linear-gradient(180deg, var(--hi) 0%, var(--c) 55%, var(--lo) 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .45) inset, 0 -1px 0 rgba(0, 0, 0, .15) inset, 0 8px 22px -6px var(--c), 0 0 28px -4px color-mix(in srgb, var(--c) 70%, transparent); }
+#side button[aria-pressed="true"] { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+#side button svg { transition: transform .35s var(--ease-out); }
+#side button[data-v="long"]:hover:not(:disabled) svg, #side button[data-v="long"][aria-pressed="true"] svg { transform: translateY(-2px); }
+#side button[data-v="short"]:hover:not(:disabled) svg, #side button[data-v="short"][aria-pressed="true"] svg { transform: translateY(2px); }
+#side button[data-v="long"]:hover:not([aria-pressed="true"]):not(:disabled) { color: var(--long-hi); }
+#side button[data-v="short"]:hover:not([aria-pressed="true"]):not(:disabled) { color: var(--short-hi); }
+#side { border-color: color-mix(in srgb, var(--c) 45%, rgba(255, 255, 255, .12)); transition: border-color .35s var(--ease); }
+.sideglow { position: fixed; z-index: 1; left: -10vw; bottom: -20vh; width: 70vw; height: 70vh; pointer-events: none; opacity: 0;
+  background: radial-gradient(closest-side, var(--g, var(--long)), transparent); filter: blur(40px); mix-blend-mode: soft-light; transition: opacity .6s var(--ease), background .6s var(--ease); }
+body[data-screen="lobby"] .sideglow { opacity: .55; }
+body[data-side="short"] .sideglow { --g: var(--short); }
+.pill.is-long { background: var(--long); color: #fff; }
+.pill.is-short { background: var(--short); color: #fff; }
+
+/* markets: glass cards that lift, the picked one gets a saffron rim */
+.market { border-radius: 14px; background: linear-gradient(180deg, rgba(43, 20, 10, .5), rgba(43, 20, 10, .36)); border-color: rgba(255, 255, 255, .12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 12px 30px -18px rgba(43, 20, 10, .7); }
+.market:hover:not(:disabled):not([aria-pressed="true"]) { transform: translateY(-2px); background: linear-gradient(180deg, rgba(43, 20, 10, .42), rgba(43, 20, 10, .28)); border-color: rgba(255, 255, 255, .28); }
+.market:active:not(:disabled) { transform: scale(.97); }
+.market[aria-pressed="true"] { background: linear-gradient(180deg, #fff 0%, #f6eee6 100%); border-color: transparent;
+  box-shadow: 0 0 0 2px var(--safran), 0 1px 0 #fff inset, 0 14px 30px -12px rgba(43, 20, 10, .6); }
+
+/* saffron CTA: soft sheen that sweeps on hover */
+.cta { position: relative; overflow: hidden; border-radius: 12px; }
+.cta::after { content: ""; position: absolute; inset: 0; transform: translateX(-120%); pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%); }
+.cta:hover:not(:disabled)::after { transition: transform .9s var(--ease-out); transform: translateX(120%); }
+.cta:disabled::after { display: none; }
+
+/* glass secondary button (share) */
+.ghost { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 12px; color: #fff;
+  background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .28); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .15) inset; transition: background .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease); }
+.ghost:hover { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .5); transform: translateY(-2px); }
+.ghost:active { transform: scale(.98); }
+.ghost svg { width: 17px; height: 17px; fill: currentColor; flex: none; }
+@media (prefers-reduced-motion: reduce) { .seg.is-ready .seg__thumb, .seg__thumb::after, .cta::after { transition: none; animation: none; } }
+.cta, .ghost { white-space: nowrap; }
+@media (max-width: 767px) { .result .go .ghost { flex: none; padding: 0 18px; } .result .go .cta { min-width: 0; padding: 0 16px; } }
