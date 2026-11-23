@@ -1,8 +1,5 @@
-// Siroclimb: the contract between the front end and the back end.
-//
-// The UI only talks to this module. Everything below the `MOCK` line is an in-browser simulation
-// so the front can be built and demoed alone. Eden: keep the exported names and shapes, swap the
-// internals for the real program / services (MagicBlock rollup, Pyth prices, VRF, rounds).
+// Siroclimb in-browser simulation (`?mock`): the same contract as js/api.js, no chain,
+// so the front can be built and demoed offline. The real thing is js/api-chain.js.
 //
 // Units: amounts in test USDC (tUSDC), prices in USD, times in ms since epoch unless noted.
 //
@@ -40,12 +37,11 @@ const DEMO_VOL = 4;                              // the demo feed moves faster t
 const TICK_MS = 200;
 
 const ASSETS = [
-  { id: 'BTC', name: 'Bitcoin', ticker: 'BTC', kind: 'crypto', p0: 63255, vol: 0.0010 },
-  { id: 'ETH', name: 'Ethereum', ticker: 'ETH', kind: 'crypto', p0: 1797.5, vol: 0.0012 },
-  { id: 'SOL', name: 'Solana', ticker: 'SOL', kind: 'crypto', p0: 76.77, vol: 0.0015 },
   { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', p0: 385.17, vol: 0.0011 },
-  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', p0: 159.81, vol: 0.0010 },
+  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', p0: 164.70, vol: 0.0010 },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', p0: 349.03, vol: 0.0007 },
+  { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', p0: 3633.4, vol: 0.0006 },
+  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', p0: 1.3031, vol: 0.0005 },
 ];
 
 export const rules = { ladder: [1, 1.5, 2, 2.5, 3, 3.5, 4], stepEvery: 6, duration: 60, roundEntry: 10, prizeSplit: [0.5, 0.3, 0.2] };
