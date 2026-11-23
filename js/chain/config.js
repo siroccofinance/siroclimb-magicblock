@@ -34,17 +34,29 @@ export const ATA_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efT
 export const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd');
 
-/// The six markets, in on-chain order. Prices are MagicBlock's Pyth Lazer
-/// feeds on the rollup: PDA("price_feed", "pyth-lazer", lazerId) of the
-/// oracle program; `exponent` from Pyth Lazer's symbol list.
+/// The five markets, in on-chain order: tokenized stocks and real-world assets.
+/// The xStocks and gold are priced by MagicBlock's Pyth Lazer feeds on the
+/// rollup (PDA("price_feed", "pyth-lazer", lazerId) of the oracle program,
+/// `exponent` from Pyth Lazer's symbol list). GBP/USD has no feed on the
+/// rollups, so it is the program's relay account, pushed from the rollup by
+/// the relay key (api/relay.js, ops keeper).
+///
+/// `hours`: when the price moves. Pyth's US equity feeds cover pre-market,
+/// regular, post-market and overnight sessions (Sun 20:00 to Fri 20:00 New
+/// York); gold trades Sun 18:00 to Fri 17:00 with a daily hour off; FX
+/// Sun 17:00 to Fri 17:00. Outside those, the feed goes stale and the market
+/// shows as closed.
 export const MARKETS = [
-  { id: 'BTC', name: 'Bitcoin', ticker: 'BTC', kind: 'crypto', lazerId: 1, exponent: -8, feed: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr' },
-  { id: 'ETH', name: 'Ethereum', ticker: 'ETH', kind: 'crypto', lazerId: 2, exponent: -8, feed: '5vaYr1hpv8yrSpu8w3K95x22byYxUJCCNCSYJtqVWPvG' },
-  { id: 'SOL', name: 'Solana', ticker: 'SOL', kind: 'crypto', lazerId: 6, exponent: -8, feed: 'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu' },
-  { id: 'TSLA', name: 'Tesla', ticker: 'TSLA', kind: 'stock', lazerId: 1435, exponent: -5, feed: '8L7ccCxTBZaLsMMdhAod5fFnpdEWGSDPW4y1td7y3y8N' },
-  { id: 'NVDA', name: 'NVIDIA', ticker: 'NVDA', kind: 'stock', lazerId: 1314, exponent: -5, feed: '3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC' },
-  { id: 'AAPL', name: 'Apple', ticker: 'AAPL', kind: 'stock', lazerId: 922, exponent: -5, feed: 'B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1' },
+  { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', lazerId: 1435, exponent: -5, feed: '8L7ccCxTBZaLsMMdhAod5fFnpdEWGSDPW4y1td7y3y8N', hours: 'us-equity',
+    mint: '9p4P41Ad8jFEVZsehjt6mjyg6uhsZkouoAesnGb7mPcU', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
+  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', lazerId: 1314, exponent: -5, feed: '3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC', hours: 'us-equity',
+    mint: 'E4XAzgHmwAcZ1ajUfUdkDUPCen6CutyXZk218F5623WG', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
+  { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', lazerId: 922, exponent: -5, feed: 'B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1', hours: 'us-equity',
+    mint: 'DsPehKph9sP6FXAQTQSuZj6Us8XcKk9YKXt8LWfkAoW', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
+  { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', lazerId: 346, exponent: -3, feed: '9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn', hours: 'metal' },
+  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', lazerId: 333, exponent: -5, feed: '83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21', hours: 'fx', relay: true },
 ].map((m, index) => ({ ...m, index, feedKey: new PublicKey(m.feed) }));
+export const RELAY_ASSET = 4;
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);
 
 // Mirrors of the program's constants (chain/programs/siroclimb/src).
@@ -53,7 +65,7 @@ export const ONE_USDC = 1_000_000;
 export const LADDER = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
-export const BOOST = [70, 55, 35, 80, 25, 70];
+export const BOOST = [90, 25, 90, 180, 400];
 export const ROUND_CYCLE = 80;
 export const ROUND_JOIN_SECONDS = 20;
 export const ROUND_SLOTS = 4;

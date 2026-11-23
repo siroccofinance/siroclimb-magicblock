@@ -14,11 +14,12 @@ let t = Date.now();
 console.log('onboard', await c.onboard({ name: 'probe' }), Date.now() - t, 'ms');
 console.log('usdc', await c.usdc(), 'session sol', await c.sol(c.session.keypair.publicKey));
 const crank = process.argv[2] !== 'nocrank';
-const r = await c.startRun({ asset: 0, side: 'long', stake: 10, crank });
+const asset = Number(process.env.ASSET || 0);
+const r = await c.startRun({ asset, side: 'long', stake: 10, crank });
 console.log('started', r.ms, r.run.status, r.run.entryPrice, r.sigs);
 for (let i = 0; i < 8; i++) { await sleep(1000); const x = await c.run(); console.log('t', i, 'status', x.status, 'ticks', x.ticks, 'value', x.value / 1e6, 'step', x.maxStep); }
 t = Date.now();
-console.log('cash out', await c.cashOut(0), Date.now() - t, 'ms');
+console.log('cash out', await c.cashOut(asset), Date.now() - t, 'ms');
 t = Date.now();
 await c.waitOnBase((await import('../js/chain/pdas.js')).runPda(c.me));
 console.log('back on base', Date.now() - t, 'ms');

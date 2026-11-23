@@ -5,7 +5,7 @@
 import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, ROUND, RUN, USDC_MINT } from './config.js';
-import { decodeProfile, decodeRound, decodeRun, decodeFeed } from './codec.js';
+import { decodePrice, decodeProfile, decodeRound, decodeRun } from './codec.js';
 import { approveIx, createAtaIdempotent, createSessionIx, ix } from './ix.js';
 import { ataOf, profilePda, roundPda, runPda, sessionTokenPda } from './pdas.js';
 import { send, sleep } from './tx.js';
@@ -168,7 +168,7 @@ export class Climber {
 /// Live price of a market from its feed account on the rollup (USD).
 export async function readPrice(er, asset) {
   const a = await er.getAccountInfo(MARKETS[asset].feedKey);
-  const f = decodeFeed(a.data);
+  const f = decodePrice(a.data);
   return { price: f.raw * 10 ** MARKETS[asset].exponent, raw: f.raw, ts: f.ts };
 }
 export { PublicKey };
