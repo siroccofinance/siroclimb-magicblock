@@ -22,6 +22,8 @@ function encodeArg(type, v) {
     n.writeUInt32LE(s.length);
     return Buffer.concat([n, s]);
   }
+  if (type === 'i32') { const b = Buffer.alloc(4); b.writeInt32LE(Number(v)); return b; }
+  if (type === 'pubkey') return Buffer.from(v.toBytes());
   if (type.array && type.array[0] === 'u8') return Buffer.from(v);
   throw new Error('unsupported arg type ' + JSON.stringify(type));
 }
@@ -106,6 +108,16 @@ export function decodeRound(data) {
     });
   }
   return r;
+}
+
+export function decodeRelay(data) {
+  const r = new Reader(data);
+  return { market: r.u8(), exponent: r.i32(), raw: r.i64(), ts: r.i64(), updates: r.u64(), relayer: r.key() };
+}
+
+/// A market's price account: our relay account, or a MagicBlock Pyth Lazer feed.
+export function decodePrice(data) {
+  return isAccount('RelayFeed', data) ? decodeRelay(data) : decodeFeed(data);
 }
 
 /// A MagicBlock Pyth Lazer feed account: price i64 at 73, publish time i64 at 93.
