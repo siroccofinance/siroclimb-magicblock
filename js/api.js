@@ -30,6 +30,8 @@
 //   openPack()                               → Promise<{ tier, maxLeverage, proof, url }>   leverage pack drawn by MagicBlock VRF
 //   pack()                                   → { tier, maxLeverage } | null                 the pack waiting to be played
 //   proof(runId)                             → [{ label, sig, layer, url }]                  explorer links of a climb's transactions
+//   user() / setName(name)                  → { name, address } / Promise<name>   the on-chain handle
+//   sessionInfo()                            → Promise<{ key, validUntil, sol } | null>      the game session key
 //   shareCard(png, result)                   → Promise<string|null> optional: host the share picture (null = not hosted)
 //
 // Run        { id, mode, assetId, side, stake, entryPrice, startedAt, ladder, stepEvery, duration }
@@ -73,4 +75,7 @@ export const openPack = (...a) => impl.openPack(...a);
 export const pack = opt('pack', () => null);
 export const proof = opt('proof', () => []);
 export const explorer = opt('explorer', null);
+export const sessionInfo = opt('sessionInfo', async () => null);
+export const setName = opt('setName', async (n) => n);
+export const user = opt('user', () => ({ name: 'You' }));
 export const shareCard = (...a) => impl.shareCard(...a);
