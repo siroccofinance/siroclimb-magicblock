@@ -5,3 +5,9 @@ out/
 # PNG frame sequences from the 3D renders stay local (several GB)
 3d/frames*/
 3d/master-*/
+
+# Anchor build output and local keys
+chain/target/
+chain/.anchor/
+test-ledger/
+.env*
