@@ -44,12 +44,25 @@ if (FLOW === 'round') {
   // join when the window is open
   await until(async () => /Join for/.test(await text('#go')), 90000, 'join window');
 }
-await pg.click('#go');
+const connected = /^\w{4}…\w{4}$/.test(await text('#wallet'));
+if (!(FLOW === 'menu' && connected)) await pg.click(FLOW === 'menu' ? '#wallet' : '#go');
 // no browser wallet in headless Chrome: the burner is the only choice, picked directly
 await wait(800);
 if (await pg.$('#walletSheet:not([hidden])')) { await pg.screenshot({ path: 'out/ui-2wallets.png' }); await pg.click('#walletList [data-w=burner]'); }
 say('burner, onboarding…');
-if (FLOW === 'pack') {
+if (FLOW === 'menu') {
+  // connect from the wallet button, then the menu: handle, session, rename on chain
+  await until(async () => /^\w{4}…\w{4}$/.test(await text('#wallet')), 90000, 'connected');
+  await pg.click('#wallet'); await wait(1500);
+  say('who', await text('#walletWho'));
+  const handle = 'climber' + Math.floor(Math.random() * 900 + 100);
+  pg.once('dialog', (d) => d.accept(handle));
+  await pg.click('[data-act=name]');
+  await until(async () => (await text('#toast')).includes(handle), 30000, 'renamed');
+  await pg.click('#wallet'); await wait(800);
+  say('renamed', await text('#walletWho'));
+  await pg.screenshot({ path: 'out/ui-6menu.png' });
+} else if (FLOW === 'pack') {
   // a first climb onboards the burner; then the pack: VRF draw, free climb on the house
   await until(async () => (await scr()) === 'game', 90000, 'game screen');
   await wait(3000); await pg.click('#cash');
