@@ -24,6 +24,9 @@
 //   onBalance(cb)                            → unsubscribe()
 //   faucet()                                 → Promise<number>    tops the test balance back up
 //   openPack()                               → Promise<{ tier, maxLeverage, proof }>   leverage packs (VRF), UI off for now
+//   shareCard(png, result)                   → Promise<string|null> optional: host the share picture and return a public page
+//                                              whose og:image / twitter:card is that picture, so the posted link shows it by itself.
+//                                              null = not hosted (the front then attaches the picture itself: share sheet or clipboard)
 //
 // Run        { id, mode, assetId, side, stake, entryPrice, startedAt, ladder, stepEvery, duration }
 // RunUpdate  { t (s since start), price, step, leverage, value, pnl, pnlPct, risk (0..1 of the stake lost), status }
@@ -238,6 +241,9 @@ export async function openPack() {
   const p = PACKS.find(p => (acc += p.odds) >= r) || PACKS[0];
   return { tier: p.tier, maxLeverage: p.maxLeverage, proof: 'mock-' + r.toString(16).slice(2, 10) };
 }
+
+// the front cannot host pictures alone: the back end can upload `png` and return a page with twitter:card = summary_large_image
+export async function shareCard(png, result) { return null; }
 
 // test hook for the front (not part of the contract): force a fall on a live run
 export const _debug = { bust() { for (const r of runs.values()) if (!r.bot && r.status === 'live') r.value = -1; } };
