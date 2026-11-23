@@ -135,6 +135,8 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
 
+CI (GitHub Actions) runs the rules tests and the client checks on every pull request; `npm run ci` runs the same steps locally. CI stays off devnet so it is deterministic: the chain is covered by the battery and the browser flows above.
+
 ## Latencies (battery medians, devnet + devnet-eu)
 
 | Step | Median |
