@@ -7,7 +7,8 @@ import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { baseConnection, readJson } from './_lib.js';
 import { send } from '../js/chain/tx.js';
 
-const AMOUNT = 0.08e9;
+/// Enough for the onboarding (session key top-up and rents) and one more top-up later.
+const AMOUNT = 0.15e9;
 const ENOUGH = 0.05e9;
 const perIp = new Map();
 
@@ -18,7 +19,8 @@ export default async function handler(req, res) {
     if (!process.env.FAUCET_SECRET_KEY) return out(503, { error: 'faucet not configured' });
     const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0];
     const hits = (perIp.get(ip) || []).filter((t) => Date.now() - t < 3600e3);
-    if (hits.length >= 5) return out(429, { error: 'too many requests' });
+    const local = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip);
+    if (hits.length >= 5 && !local) return out(429, { error: 'too many requests' });
     perIp.set(ip, [...hits, Date.now()]);
     const { address } = await readJson(req);
     const to = new PublicKey(address);
