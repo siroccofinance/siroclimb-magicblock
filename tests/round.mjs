@@ -8,7 +8,7 @@ const pg = await b.newPage(); pg.on('pageerror', e => console.log('ERR', e.messa
 const mob = +W < 768; await pg.setViewport({ width: +W, height: +H, isMobile: mob, hasTouch: mob });
 const wait = ms => new Promise(r => setTimeout(r, ms)), shot = n => pg.screenshot({ path: `${out}/${tag}-${n}.png` });
 await pg.evaluateOnNewDocument(() => localStorage.setItem('siroclimb:ui:seenRules', 'true'));
-await pg.goto(`http://localhost:${srv.address().port}/play.html`, { waitUntil: 'networkidle2' });
+await pg.goto(`http://localhost:${srv.address().port}/play.html?mock`, { waitUntil: 'networkidle2' });
 await wait(1500); await shot('0top');
 await pg.click('#mode button[data-v=round]'); await wait(600);
 // wait for an open round with at least 8 s left to join
