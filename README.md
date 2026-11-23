@@ -117,7 +117,8 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll, round slots, relay |
 | `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GBP/USD) |
 | `npm run battery -- 24 2 2` | on-chain battery: players, rounds, solo waves ([BATTERY.md](BATTERY.md)) |
-| `npm run test:ui` | the real front from an empty burner, headless Chrome (`FLOW=round` for a round) |
+| `npm run test:ui` | the real front in headless Chrome (`FLOW=round`, `pack`, `menu`; `FRESH=1` from an empty burner) |
+| `npm run ci` | every CI step, locally |
 | `npm run keeper` | optional keeper: relay, rounds, house players, sweeper |
 
 ## Tests and results
@@ -129,9 +130,13 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | On-chain battery, rounds | `npm run battery -- 24 2 0` | two full 24-seat rounds drawn by VRF, every payout checked: 66 / 67 (one test bug, fixed) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
 | Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
+| Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
+| Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
 | Simulation flows (`?mock`) | `npm run test:solo` etc. | the original Puppeteer flows of the front |
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
+
+CI (GitHub Actions) runs the rules tests and the client checks on every pull request; `npm run ci` runs the same steps locally. CI stays off devnet so it is deterministic: the chain is covered by the battery and the browser flows above.
 
 ## Latencies (battery medians, devnet + devnet-eu)
 
