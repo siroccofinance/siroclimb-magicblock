@@ -223,6 +223,8 @@ async function playRound(k) {
   r = await field[0].round(id);
   check(tag, 'pot = entries', r.pot === r.players * 10 * ONE_USDC, `${r.players} players pot ${r.pot / 1e6}`);
   while (now() < starts) await sleep(200);
+  // the devnet clock runs a second or two behind the wall clock: wait for it
+  for (;;) { const t = await base.getBlockTime(await base.getSlot()).catch(() => 0); if (t >= starts) break; await sleep(400); }
   await refuse(tag, 'join after the bell', 6016, () => spare.joinRound(id, 'long'));
   await timed('delegate round (Solana)', () => F(3).delegateRound(id));
   await timed('go live + crank (rollup)', () => F(4).goLive(id, r.asset));
