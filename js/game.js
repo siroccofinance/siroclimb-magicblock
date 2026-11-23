@@ -156,7 +156,16 @@ walletBtn.onclick = e => {
   e.stopPropagation();
   if (!api.account()) return connect();
   const open = walletMenu.hidden; walletMenu.hidden = !open; walletBtn.setAttribute('aria-expanded', open);
+  if (open) renderWho();
 };
+// who you are on chain: handle, and how long the game session key lasts
+async function renderWho() {
+  const el = $('#walletWho'), u = api.user();
+  walletMenu.querySelectorAll('[data-chain]').forEach(b => { b.hidden = api.mock; });
+  el.innerHTML = `<b>${u.name}</b>`;
+  const s = await api.sessionInfo();
+  if (s) el.innerHTML = `<b>${u.name}</b>Session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${s.sol.toFixed(3)} SOL for fees`;
+}
 walletMenu.onclick = async e => {
   const act = e.target.dataset.act; walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false);
   if (act === 'copy') { try { await navigator.clipboard.writeText(api.account()); toast('Address copied'); } catch { toast(api.account()); } }
