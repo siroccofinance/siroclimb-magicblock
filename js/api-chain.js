@@ -221,8 +221,10 @@ function resultOf(R) {
   const value = c.value / ONE_USDC;
   const st = c.status === RUN.SETTLED ? R.endStatus || 'cashed' : STATUS[c.status] || 'cashed';
   const end = c.endTs || Math.floor(Date.now() / 1000);
+  // a pack climb is played with the house's money: the player only ever gains
+  const pnl = R.pub.pack ? Math.max(0, value - stake) : value - stake;
   return {
-    status: st, value, pnl: value - stake, pnlPct: (value / stake - 1) * 100, maxLeverage: LADDER[c.maxStep || 0],
+    status: st, value: R.pub.pack ? stake + pnl : value, pnl, pnlPct: (value / stake - 1) * 100, maxLeverage: LADDER[c.maxStep || 0], pack: !!R.pub.pack,
     duration: Math.max(0, Math.min(RUN_SECONDS, end - c.startTs)), entryPrice: toUsd(a, c.entryPrice), exitPrice: toUsd(a, c.lastPrice || c.entryPrice),
   };
 }
