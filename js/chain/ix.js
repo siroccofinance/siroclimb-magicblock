@@ -49,7 +49,8 @@ export const ix = {
   initialize: (admin, usdcMint, vault) => build('initialize', { admin, usdc_mint: usdcMint, vault }),
   fundHouse: (admin, amount) => build('fund_house', { admin, usdc_mint: mint(), vault: VAULT }, { amount }),
   initRoundSlot: (admin, slot) => build('init_round_slot', { admin, round: roundSlotPda(slot) }, { slot }),
-  faucet: (user) => build('faucet', { user, claim: faucetPda(user), usdc_mint: mint(), user_usdc: ataOf(user, mint()) }),
+  /// `owner`: whose token account receives the top up (a session key claims for its wallet).
+  faucet: (user, owner = user) => build('faucet', { user, claim: faucetPda(user), usdc_mint: mint(), user_usdc: ataOf(owner, mint()) }),
   initProfile: (user, name) => build('init_profile', { user, profile: profilePda(user) }, { name }),
   setName: (user, name) => build('set_name', { user, profile: profilePda(user) }, { name }),
 
