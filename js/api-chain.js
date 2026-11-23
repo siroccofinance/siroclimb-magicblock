@@ -21,7 +21,7 @@ import {
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
 import { decodePrice, decodeProfile, decodeRound, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
-import { profilePda, roundPda, runPda } from './chain/pdas.js';
+import { profilePda, roundPda, roundSlotPda, runPda } from './chain/pdas.js';
 import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor, uniqueHandles } from './chain/handles.js';
@@ -359,16 +359,34 @@ async function readRound(id) {
   } else r = { ...decodeRound(b.data), layer: 'base' };
   return r.id === id ? r : null;
 }
+/// Every slot, not just the current round's: a round left on the rollup by a
+/// closed tab (or a crash) still holds its slot until someone moves it along.
+async function readSlots() {
+  const keys = [0, 1, 2, 3].map(roundSlotPda);
+  const b = await base.getMultipleAccountsInfo(keys);
+  const delegated = keys.filter((k, i) => b[i] && b[i].owner.toBase58() === DELEGATION);
+  const e = delegated.length ? await er.getMultipleAccountsInfo(delegated) : [];
+  const out = [];
+  b.forEach((a, i) => {
+    if (!a) return;
+    if (a.owner.toBase58() === DELEGATION) {
+      const j = delegated.findIndex((k) => k.equals(keys[i]));
+      if (e[j]) out.push({ ...decodeRound(e[j].data), layer: 'er' });
+    } else out.push({ ...decodeRound(a.data), layer: 'base' });
+  });
+  return out;
+}
 async function pollRounds() {
   const now = Date.now(), cur = roundIdAt(now);
-  for (const id of [cur - 1, cur]) {
-    try {
-      const r = await readRound(id);
-      if (r) chainRounds.set(id, r); else chainRounds.delete(id);
-      if (r && r.status === ROUND.SETTLED && (!lastSettled || lastSettled.id < r.id)) lastSettled = r;
-    } catch (e) { log('round', e.message); }
-  }
-  for (const k of chainRounds.keys()) if (k < cur - 2) chainRounds.delete(k);
+  try {
+    const all = await readSlots();
+    chainRounds.clear();
+    for (const r of all) {
+      if (r.status === ROUND.FREE) continue;
+      chainRounds.set(r.id, r);
+      if (r.status === ROUND.SETTLED && (!lastSettled || lastSettled.id < r.id)) lastSettled = r;
+    }
+  } catch (e) { log('round', e.message); }
   roundTick(now);
   autopilot(now).catch((e) => log('autopilot', e.message));
 }
@@ -508,15 +526,18 @@ async function openRoundNow(id) {
   return climber.openRound(id, mask);
 }
 const jitter = () => sleep(Math.random() * 1200);
+/// What the program accepts to reuse a slot (open_round): settled, or empty and past its bell.
+const slotReusable = (x, t) => x.status === ROUND.SETTLED || ((x.status === ROUND.OPEN || x.status === ROUND.DRAWING) && x.players === 0 && t > x.startsAt);
 async function autopilot(now) {
   if (!climber || !climber.hasSession || sol < 0.002) return;
   const cur = roundIdAt(now), t = now / 1000;
-  for (const id of [cur - 1, cur]) {
+  for (const id of new Set([...chainRounds.keys(), cur])) {
     const r = chainRounds.get(id);
     const startsAt = id * ROUND_CYCLE + ROUND_JOIN_SECONDS;
     if (!r) {
       // open the current round once its slot is free (only if someone is around to play: me)
-      if (id === cur && t < startsAt - 4 && wantsRound()) step(`open:${id}`, async () => { await jitter(); if (!(await readRound(id))) await openRoundNow(id); });
+      const holder = [...chainRounds.values()].find((x) => x.slot === id % 4 && x.id !== id && !slotReusable(x, t));
+      if (id === cur && !holder && t < startsAt - 4 && wantsRound()) step(`open:${id}`, async () => { await jitter(); if (!(await readRound(id))) await openRoundNow(id); });
       continue;
     }
     if (r.status === ROUND.DRAWING && t > r.settledTs + 7 && t < startsAt - 4) step(`redraw:${id}`, () => openRoundNow(id));
