@@ -117,7 +117,8 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll, round slots, relay |
 | `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GBP/USD) |
 | `npm run battery -- 24 2 2` | on-chain battery: players, rounds, solo waves ([BATTERY.md](BATTERY.md)) |
-| `npm run test:ui` | the real front from an empty burner, headless Chrome (`FLOW=round` for a round) |
+| `npm run test:ui` | the real front in headless Chrome (`FLOW=round`, `pack`, `menu`; `FRESH=1` from an empty burner) |
+| `npm run ci` | every CI step, locally |
 | `npm run keeper` | optional keeper: relay, rounds, house players, sweeper |
 
 ## Tests and results
