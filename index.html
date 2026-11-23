@@ -101,7 +101,10 @@
 
     <div class="go">
       <p class="go__meta" id="goMeta"></p>
-      <button class="cta" id="go">Start climbing</button>
+      <div class="go__row">
+        <button class="ghost ghost--pack" id="packBtn" data-open="packSheet" hidden>Leverage pack</button>
+        <button class="cta" id="go">Start climbing</button>
+      </div>
     </div>
   </section>
 
@@ -148,6 +151,7 @@
       <h2 class="title" id="rV">+0.00 tUSDC</h2>
       <dl class="stats" id="rS"></dl>
       <p class="result__round" id="rR" hidden></p>
+      <p class="proof" id="rProof" hidden></p>
     </div>
     <div class="go">
       <button class="ghost" id="share" aria-label="Share your result on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.18h1.7L7.4 4.73H5.58l11.09 14.45z"/></svg>Share on X</button>
@@ -182,6 +186,25 @@
         <button data-v="round" role="tab">Last round</button><button data-v="today" role="tab">Today</button><button data-v="all" role="tab">All time</button>
       </div>
       <ol class="board" id="boardList"></ol>
+    </div>
+  </div>
+
+  <div class="sheet" id="walletSheet" role="dialog" aria-modal="true" aria-labelledby="wallet-title" hidden>
+    <div class="sheet__card" tabindex="-1">
+      <button class="icon sheet__x" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 id="wallet-title">Connect a wallet</h2>
+      <p>One approval sets you up on Solana devnet: your profile, 1,000 test USDC and a game session key. After that every climb, cash out and round is instant, with no more pop ups.</p>
+      <div class="wallets" id="walletList"></div>
+      <p class="fine">No wallet? The burner wallet lives in this browser and gets its devnet SOL from the site. Devnet only.</p>
+    </div>
+  </div>
+
+  <div class="sheet" id="packSheet" role="dialog" aria-modal="true" aria-labelledby="pack-title" hidden>
+    <div class="sheet__card" tabindex="-1">
+      <button class="icon sheet__x" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2 id="pack-title">Leverage pack</h2>
+      <div class="pack" id="packBody"></div>
+      <button class="cta sheet__ok" id="packGo">Open a pack</button>
     </div>
   </div>
 
