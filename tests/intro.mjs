@@ -10,7 +10,7 @@ const pg = await b.newPage(); pg.on('pageerror', e => console.log('ERR', e.messa
 const mob = +W < 768; await pg.setViewport({ width: +W, height: +H, isMobile: mob, hasTouch: mob });
 const wait = ms => new Promise(r => setTimeout(r, ms)), shot = n => pg.screenshot({ path: `${out}/${tag}-${n}.png` });
 const base = `http://localhost:${srv.address().port}/`;
-await pg.goto(base, { waitUntil: 'networkidle2' }); await wait(3200);
+await pg.goto(base + '?mock', { waitUntil: 'networkidle2' }); await wait(3200);
 console.log('state', JSON.stringify(await pg.evaluate(() => ({ screen: document.body.dataset.screen, live: !!document.querySelector('canvas.is-live'), film: document.querySelector('#film').paused }))));
 await shot('0intro');
 const t0 = Date.now(); await pg.click('#startPlaying');
@@ -20,5 +20,5 @@ await pg.click('.sheet__ok').catch(() => {}); await wait(600);
 const t1 = Date.now(); await pg.click('#go');
 for (const ms of [900, 1400, 2400]) { await wait(ms - (Date.now() - t1)); await shot('g' + ms); }
 await pg.goBack().catch(() => {}); await wait(800); console.log('back during game ->', await pg.evaluate(() => document.body.dataset.screen));
-await pg.goto(base + 'play.html', { waitUntil: 'networkidle2' }); await wait(2000); console.log('deep', pg.url().split('/').pop(), await pg.evaluate(() => document.body.dataset.screen)); await shot('deep');
+await pg.goto(base + 'play.html?mock', { waitUntil: 'networkidle2' }); await wait(2000); console.log('deep', pg.url().split('/').pop(), await pg.evaluate(() => document.body.dataset.screen)); await shot('deep');
 await b.close(); srv.close();

@@ -10,7 +10,7 @@ await pg.setViewport({ width: +W, height: +H, isMobile: mob, hasTouch: mob, devi
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const shot = n => pg.screenshot({ path: `${out}/${tag}-${n}.png` });
 const scr = () => pg.evaluate(() => document.body.dataset.screen);
-await pg.goto(`http://localhost:${srv.address().port}/play.html`, { waitUntil: 'networkidle2' });
+await pg.goto(`http://localhost:${srv.address().port}/play.html?mock`, { waitUntil: 'networkidle2' });
 await wait(2200); await shot('0rules');
 await pg.click('.sheet__ok'); await wait(700); await shot('1lobby');
 if (flow === 'solo') {

@@ -10,7 +10,7 @@ await pg.setViewport({ width: +W, height: +H, isMobile: mob, hasTouch: mob, devi
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const shot = n => pg.screenshot({ path: `${out}/${tag}-${n}.png` });
 const scr = () => pg.evaluate(() => document.body.dataset.screen);
-await pg.goto(`http://localhost:${srv.address().port}/index.html#play`, { waitUntil: 'networkidle2' });
+await pg.goto(`http://localhost:${srv.address().port}/index.html?mock#play`, { waitUntil: 'networkidle2' });
 await wait(1800); await pg.click('.sheet__ok').catch(() => {}); await wait(600);
 const waits = [700, 2300, 3900, 5200, 7700, 9400, 12100, 15000];
 for (const [i, w] of waits.entries()) {
