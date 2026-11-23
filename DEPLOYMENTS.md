@@ -48,11 +48,11 @@ Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlo
 ## Integration proof (explorer)
 
 - Program: https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet
-- A climb, step by step (probe, 23 Nov 2026):
-  - stake + delegate on Solana: https://explorer.solana.com/tx/3HRCdpccuHXmSuLp5AcyCd4QqDGFpbm42UG65hSBouwkkNZNsQbJmuXv4vq2DpxeH4LQjtC3wp7ULULZeb4ATSza?cluster=devnet
-  - begin on the rollup with the crank: https://explorer.solana.com/tx/5CBfkrzAGUUZv33JrwqiQcqV3j9JnTTaR2WbEJtVuyHMTzXASrfKCvEGVbRKPRWK7hJK5ZaEkDWCW5UgzyfdyFkB?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
-  - cash out + commit/undelegate on the rollup: https://explorer.solana.com/tx/2Yaw14oCZSKUX2TDSmT4Lz3qZ7WxJ7yxXTW8hz92KSgfNZLWhwnWGM1uNnvjvowtQbWz5doxCRC8A5rF8zjFgiUo?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
-  - settle on Solana: https://explorer.solana.com/tx/2CRvxpvo1g9pSbKxweejiHRpEaw4mZoVHCqgesQmLbJGoey5Uj8iNk2VPUgWvsjsFQPYGKUZxqhGge4mGFYfGh2T?cluster=devnet
+- A TSLAx climb, step by step (probe on the current deployment, 24 Nov 2026):
+  - stake + delegate on Solana: https://explorer.solana.com/tx/2N2FQJv8vKxPtLb69KSEyF17K6MUJSp8YAZKB87xSJ6s8x2aW46QynTc2S4ur5CbQSAMy26Mtf4mZfVHfTnjRtSq?cluster=devnet
+  - begin on the rollup at the Pyth Lazer price, crank scheduled: https://explorer.solana.com/tx/2KttPS5JkkoDEAcF8hBA917jYSj2EH9JfDyCPaydpuAG7CGz342rcUjeZ9C8rz5ExL8fV36dJaxVD7Wv1uFYtQEz?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
+  - cash out + commit/undelegate on the rollup: https://explorer.solana.com/tx/4C8z2rVi7HVc3LNcWejYb2rxtbCi7WPqAy3Y5uYv6tJB3Z9FXxstdaiZmR2jejyaAzAMBs4Kwb1r7YnVKPPDDX9X?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
+  - settle on Solana: https://explorer.solana.com/tx/4wKWWPu1SBTnXLzzD6xs6yGXAMgsqWXn42Wu34mjcc6c122XVqiaMsqZGxYyXCPd8Ciipy93JgwMnCoFnkeVoghh?cluster=devnet
 - A round: VRF market draw, settlement 50/30/20 (probe): settle https://explorer.solana.com/tx/4du5BAGnXDbPn216r31CTKxZcARdv4os1S8Jea3Uja49SRJNwecJnBCwMSPkgRPvE1Qd24JBsdkfv5o8K7Fpoq9S?cluster=devnet
 - A leverage pack VRF request: https://explorer.solana.com/tx/3fcfojWUocn3kPG1odomysFszZzUoZqKDjaCsTFREdygF5sr1GHNSrXvfwJ4jV4JgKo7BDke7HEXyzhkE1FQFGPK?cluster=devnet
 - A GBP/USD relay push on the rollup: https://explorer.solana.com/tx/32WR1tmvYntxWodfXQQ5sq16NAPoRW2TXinGvHo6aXDXd9RuhaPNFkJJg36SmMeRytXvUBMgW9UisqGbwwr1bzon?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
