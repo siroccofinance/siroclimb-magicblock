@@ -20,6 +20,8 @@ if (flow === 'solo') {
   const t0 = Date.now(); await pg.click('#cash');
   for (const ms of [400, 900, 1600]) { await wait(ms - (Date.now() - t0)); await shot('5cash' + ms); }
   console.log('screen', await scr(), await pg.$eval('#rV', e => e.textContent));
+  for (let i = 0; i < 30 && await scr() !== 'result'; i++) await wait(100);   // the result waits for the coin, up to ~2 s
+  await wait(300);
   await pg.click('#again'); await wait(1200); await shot('6lobby'); console.log('screen', await scr());
   await pg.click('#go'); await wait(7600);
   const t1 = Date.now(); await pg.evaluate(async () => (await import('/js/api.js'))._debug.bust());
