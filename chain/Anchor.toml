@@ -1,0 +1,17 @@
+[toolchain]
+anchor_version = "1.0.2"
+package_manager = "npm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+siroclimb = "29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov"
+
+[programs.devnet]
+siroclimb = "29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
