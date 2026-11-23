@@ -469,3 +469,25 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 .sharetip__links a:hover { text-decoration: underline; }
 .sharetip__x { position: absolute; top: 6px; right: 6px; color: rgba(43, 33, 26, .5); }
 .sharetip__x:hover { background: rgba(43, 33, 26, .07); color: var(--ink-d); }
+
+/* ── chain states: wallets, closed markets, packs, explorer proof */
+.wallets { display: grid; gap: 10px; margin: 18px 0 4px; }
+.wallets button { height: 54px; border-radius: 10px; border: 1px solid rgba(43, 33, 26, .14); background: #fff; color: var(--ink-d); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; transition: border-color .2s var(--ease), transform .2s var(--ease); }
+.wallets button:hover { border-color: rgba(43, 33, 26, .4); transform: translateY(-1px); }
+.wallets button small { font-weight: 500; font-size: 13px; color: rgba(43, 33, 26, .55); }
+.market.is-closed .p, .market.is-closed .c { opacity: .55; }
+.market.is-closed .k { color: #ffd2b8; }
+.go__row { display: flex; gap: 12px; justify-content: flex-end; }
+.ghost--pack { height: 60px; }
+.pack { display: grid; gap: 10px; color: rgba(43, 33, 26, .75); margin-bottom: 6px; }
+.pack__tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0; }
+.pack__tiers div { border-radius: 10px; padding: 10px 8px; text-align: center; background: rgba(43, 33, 26, .05); border: 1px solid transparent; }
+.pack__tiers div b { display: block; color: var(--ink-d); font-size: 15px; }
+.pack__tiers div span { font-size: 12px; }
+.pack__tiers div.is-won { background: rgba(242, 201, 76, .3); border-color: #d8a93a; }
+.pack__tiers div.is-rolling { animation: packroll .5s var(--ease) infinite alternate; }
+@keyframes packroll { from { background: rgba(43, 33, 26, .04); } to { background: rgba(242, 201, 76, .25); } }
+.pack a { color: #9a6b12; }
+.proof { margin: 10px 0 0; font-size: 13px; color: var(--ink-mute); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.proof a { color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 767px) { .go__row { justify-content: stretch; } .go__row .cta { flex: 1; } .ghost--pack { padding: 0 16px; font-size: 15px; } }

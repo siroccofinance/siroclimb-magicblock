@@ -1,4 +1,4 @@
-// Siroclimb game front. Screens: lobby → game → result. All data goes through ./api.js (mock for now).
+// Siroclimb game front. Screens: lobby → game → result. All data goes through ./api.js (on chain, or the simulation with ?mock).
 // The 3D scene is the hero's: in the lobby the belt loops; on start it brakes, the coin's box climbs one level
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
@@ -32,8 +32,8 @@ const shortAddr = a => a.slice(0, 4) + '…' + a.slice(-4);
 // ── state
 const assets = api.listAssets();
 const byId = Object.fromEntries(assets.map(a => [a.id, a]));
-const C = { mode: store.get('mode', 'solo'), asset: store.get('asset', 'BTC'), side: store.get('side', 'long'), stake: store.get('stake', 25) };
-if (!byId[C.asset]) C.asset = 'BTC';
+const C = { mode: store.get('mode', 'solo'), asset: store.get('asset', assets[0].id), side: store.get('side', 'long'), stake: store.get('stake', 25) };
+if (!byId[C.asset]) C.asset = assets[0].id;
 let screen = body.dataset.screen || 'intro', round = api.currentRound(), busy = false;
 let run = null, upd = null, shownStep = 0, ended = null, roundTimer = 0;
 const D = { value: 0, pnl: 0, pct: 0, danger: 0 };           // displayed values, eased toward the feed every frame
@@ -131,12 +131,26 @@ function renderWallet() {
   walletBtn.classList.toggle('is-on', !!a);
   walletBtn.textContent = a ? shortAddr(a) : mobile() ? 'Connect' : 'Connect wallet';
 }
+// wallet chooser: injected wallets and the devnet burner (the simulation has a single demo wallet)
+let pickWallet = null;
+function chooseWallet() {
+  const list = api.wallets();
+  if (api.mock || list.length === 1) return Promise.resolve(list[0].id);
+  return new Promise(res => {
+    pickWallet = res;
+    $('#walletList').innerHTML = list.map(w => `<button data-w="${w.id}">${w.name}<small>${w.id === 'burner' ? 'instant, no install' : 'browser wallet'}</small></button>`).join('');
+    openSheet('walletSheet');
+  });
+}
+$('#walletList').onclick = e => { const b = e.target.closest('button'); if (!b) return; const f = pickWallet; pickWallet = null; closeSheet(); f && f(b.dataset.w); };
 async function connect(quiet) {
   if (api.account()) return true;
-  walletBtn.classList.add('is-busy'); walletBtn.textContent = 'Connecting…';
-  try { await api.connect(); renderWallet(); if (quiet !== true) toast('Wallet connected, game session ready'); return true; }
+  const id = await chooseWallet(); if (!id) return false;
+  walletBtn.classList.add('is-busy'); walletBtn.textContent = 'Setting up…';
+  if (!api.mock) toast(id === 'burner' ? 'Setting up your burner wallet on devnet…' : 'Approve once in your wallet: profile, test tokens and a game session');
+  try { await api.connect(id); renderWallet(); renderBalance(api.balance()); if (quiet !== true) toast('Wallet connected, game session ready'); return true; }
   catch (e) { renderWallet(); toast(e.message || 'Could not connect'); return false; }
-  finally { walletBtn.classList.remove('is-busy'); }
+  finally { walletBtn.classList.remove('is-busy'); renderWallet(); renderPack(); }
 }
 walletBtn.onclick = e => {
   e.stopPropagation();
@@ -158,18 +172,22 @@ function renderBalance(v, bump) {
   renderGo();
 }
 api.onBalance(v => renderBalance(v, true));
-faucetBtn.onclick = async () => { await api.faucet(); toast('Test balance topped up to 1,000 tUSDC'); };
+faucetBtn.onclick = async () => {
+  if (!(await connect(true))) return;
+  try { await api.faucet(); toast('Test balance topped up to 1,000 tUSDC'); } catch (e) { toast(e.message); }
+};
 
 // ── lobby
 const marketsEl = $('#markets');
+const KIND = { stock: 'Stock', metal: 'Gold', fx: 'FX', crypto: 'Crypto' };
 const chip = {};
 for (const a of assets) {
   const b = document.createElement('button');
   b.className = 'market'; b.dataset.v = a.id;
-  b.innerHTML = `<b>${a.ticker}</b><span class="k">${a.kind === 'stock' ? 'Stock' : 'Crypto'}</span><span class="p"></span><span class="c"></span>`;
+  b.innerHTML = `<b>${a.ticker}</b><span class="k">${KIND[a.kind] || a.kind}</span><span class="p"></span><span class="c"></span>`;
   b.onclick = () => { if (C.mode === 'round') return; C.asset = a.id; store.set('asset', a.id); renderLobby(); };
   marketsEl.appendChild(b);
-  chip[a.id] = { b, p: b.querySelector('.p'), c: b.querySelector('.c') };
+  chip[a.id] = { b, p: b.querySelector('.p'), c: b.querySelector('.c'), k: b.querySelector('.k'), kind: KIND[a.kind] || a.kind };
   api.subscribePrice(a.id, ({ price: p }) => {
     if (screen !== 'lobby') return;
     const h = api.history(a.id, 60), ch = h.length ? (p / h[0].price - 1) * 100 : 0;
@@ -209,31 +227,42 @@ function renderLobby() {
   $('#mode').querySelectorAll('button').forEach(b => { b.disabled = !!joined && b.dataset.v !== 'round'; });
   $('#side').querySelectorAll('button').forEach(b => { b.disabled = !!joined; });
   const sel = C.mode === 'round' ? round.assetId : C.asset;
-  for (const [id, c] of Object.entries(chip)) { c.b.setAttribute('aria-pressed', String(id === sel)); c.b.disabled = C.mode === 'round' && id !== sel; }
+  for (const [id, c] of Object.entries(chip)) { c.b.setAttribute('aria-pressed', String(id === sel && !(C.mode === 'round' && round.drawing))); c.b.disabled = C.mode === 'round' ? id !== sel || round.drawing : false; }
+  renderClosed();
+  api.watchRounds(C.mode === 'round');
   $('#modeHint').textContent = C.mode === 'solo' ? (STAIRS ? 'The coin rolls on the live price. Leverage grows every 6 seconds.' : 'Climb at your own pace. The coin steps up every 6 seconds.')
-    : `60 seconds on ${byId[round.assetId].ticker} for everyone. The top 3 share the pot.`;
+    : round.drawing ? "Drawing this round's market with MagicBlock's verifiable randomness…" : `60 seconds on ${byId[round.assetId].ticker} for everyone. The top 3 share the pot.`;
   $('#entryV').textContent = round.entry;
   renderGo();
+}
+// markets outside their trading hours: stale feed, no new climbs
+function renderClosed() {
+  for (const [id, c] of Object.entries(chip)) {
+    const open = api.marketOpen(id);
+    c.b.classList.toggle('is-closed', !open); c.k.textContent = open ? c.kind : 'Closed';
+  }
 }
 function renderGo() {
   if (screen !== 'lobby') return;
   const go = $('#go'), meta = $('#goMeta'), bal = api.balance(), now = Date.now();
   if (C.mode === 'solo') {
-    go.disabled = busy;
-    go.textContent = busy ? 'Starting…' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
-    meta.textContent = `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x`;
+    const open = api.marketOpen(C.asset);
+    go.disabled = busy || !open;
+    go.textContent = busy ? 'Starting…' : !open ? 'Market closed' : !api.account() ? 'Connect to climb' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
+    meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x` : `${byId[C.asset].ticker} is outside its trading hours. Pick an open market.`;
     return;
   }
   const r = round, pot = `${r.players} ${r.players === 1 ? 'player' : 'players'}, pot ${money(r.pot)} tUSDC`;
   if (r.joined) { go.disabled = true; go.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}`; meta.textContent = `You are in. ${pot}`; }
-  else if (r.status === 'open' && !r.late) {
-    go.disabled = busy; go.textContent = busy ? 'Joining…' : bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;
+  else if (r.status === 'open' && r.drawing && r.players) { go.disabled = true; go.textContent = 'Drawing the market…'; meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`; }
+  else if (r.status === 'open' && !r.late && r.joinable !== false) {
+    go.disabled = busy; go.textContent = busy ? 'Joining…' : api.account() && bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;
     meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`;
   } else { go.disabled = true; go.textContent = `Next round in ${mmss((r.endsAt - now) / 1000)}`; meta.textContent = 'A round is live. A new one opens every 80 seconds.'; }
 }
 api.onRound(r => {
   const was = round; round = r;
-  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId) renderLobby(); else renderGo(); }
+  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId || was.drawing !== r.drawing) renderLobby(); else { renderGo(); renderClosed(); } }
   if (screen === 'game' && run && run.mode === 'round') renderStandings();
 });
 
@@ -243,13 +272,14 @@ $('#go').onclick = async () => {
   if (!(await connect(true))) return;
   const bal = api.balance();
   if (C.mode === 'solo') {
-    if (bal < C.stake) { await api.faucet(); toast('Test balance topped up'); return; }
+    if (!api.marketOpen(C.asset)) { toast(`${byId[C.asset].ticker} is closed right now`); return; }
+    if (bal < C.stake) { try { await api.faucet(); toast('Test balance topped up'); } catch (e) { toast(e.message); } return; }
     busy = true; renderGo();
     try { const r = await api.startRun({ mode: 'solo', assetId: C.asset, side: C.side, stake: C.stake }); enterGame(r); }
     catch (e) { toast(e.message); }
     finally { busy = false; renderGo(); }
   } else {
-    if (bal < round.entry) { await api.faucet(); toast('Test balance topped up'); return; }
+    if (bal < round.entry) { try { await api.faucet(); toast('Test balance topped up'); } catch (e) { toast(e.message); } return; }
     busy = true; renderGo();
     try { round = await api.joinRound({ side: C.side }); sound.tick(); toast("You're in. The round starts soon"); scheduleRound(); }
     catch (e) { toast(e.message); }
@@ -397,6 +427,17 @@ function showResult(res) {
   $('#rS').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   const rr = $('#rR'); rr.hidden = !round;
   if (round) rr.innerHTML = 'Waiting for the round to end…';
+  showProof(run.id);
+}
+// every transaction of the climb, on Solana and on the rollup, linked to the explorer
+let proofT = 0;
+function showProof(id) {
+  clearInterval(proofT);
+  const el = $('#rProof'), fill = () => {
+    const p = api.proof(id); el.hidden = !p.length;
+    el.innerHTML = p.length ? 'Verify: ' + p.map(x => `<a href="${x.url}" target="_blank" rel="noopener">${x.label}</a>`).join('') : '';
+  };
+  fill(); let n = 0; proofT = setInterval(() => { fill(); if (++n > 30 || !run || run.id !== id) clearInterval(proofT); }, 1000);
 }
 function fillRound(f) {
   const rr = $('#rR'); rr.hidden = false;
@@ -486,7 +527,7 @@ $('#share').onclick = async () => {
 };
 
 // ── sparkline: last 60 s, scrolls smoothly, entry line while playing
-const spark = { el: $('#spark'), entry: 0, asset: 'BTC' };
+const spark = { el: $('#spark'), entry: 0, asset: assets[0].id };
 function drawSpark() {
   const c = spark.el; if (screen !== 'game' || !c.offsetWidth) return;
   const w = c.offsetWidth, h = c.offsetHeight, r = Math.min(devicePixelRatio || 1, 2);
@@ -514,9 +555,11 @@ function openSheet(id) {
   const el = document.getElementById(id); el.hidden = false; openSheetEl = el; lastFocus = document.activeElement;
   el.querySelector('.sheet__card').focus({ preventScroll: true });
   if (id === 'board') loadBoard(store.get('board', 'today'));
+  if (id === 'packSheet') renderPack(true);
 }
 function closeSheet(now) {
   const el = openSheetEl; if (!el) return; openSheetEl = null;
+  if (el.id === 'walletSheet' && pickWallet) { const f = pickWallet; pickWallet = null; f(null); }
   if (id(el) === 'rules') store.set('seenRules', true);
   if (now === true || reduce) { el.hidden = true; return; }
   el.classList.add('is-closing');
@@ -549,6 +592,8 @@ document.addEventListener('visibilitychange', () => { last = performance.now(); 
   if (screen !== 'intro') { film.pause(); syncing = false; maybeRules(1200); }
   requestAnimationFrame(frame);
   setInterval(() => { if (screen === 'lobby') renderGo(); }, 250);
+  setInterval(() => { if (screen === 'lobby') renderClosed(); }, 1000);
+  renderPack();
 })();
 
 // ── landing → lobby: one page, one scene. The copy steps aside, the belt brakes, the coin settles on its box
@@ -627,3 +672,39 @@ function bubbleFrame() {
     b.el.style.opacity = String(k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.55) / 0.45));
   }
 }
+
+// ── leverage packs: MagicBlock VRF draws the tier, the pack is a free climb on the house up to that leverage
+const packBtn = $('#packBtn');
+let packBusy = false;
+function renderPack(inSheet) {
+  packBtn.hidden = !api.account() || api.mock;
+  const ready = api.pack();
+  packBtn.textContent = ready ? `${ready.tier} pack ready` : 'Leverage pack';
+  packBtn.classList.toggle('is-ready', !!ready);
+  if (!inSheet && $('#packSheet').hidden) return;
+  const won = ready ? ready.tier : null;
+  $('#packBody').innerHTML = `<p>A free 10 tUSDC climb on the house. MagicBlock's verifiable randomness draws how high its ladder goes; you keep the gain.</p>
+    <div class="pack__tiers">${api.PACKS.map(p => `<div class="${p.tier === won ? 'is-won' : ''} ${packBusy ? 'is-rolling' : ''}"><b>${p.tier}</b><span>up to ${levTxt(p.maxLeverage)}</span><br><span>${Math.round(p.odds * 100)}%</span></div>`).join('')}</div>
+    ${packLink ? `<p class="fine">Drawn on chain: <a href="${packLink}" target="_blank" rel="noopener">VRF request on the explorer</a></p>` : ''}`;
+  const go = $('#packGo');
+  go.disabled = packBusy;
+  go.textContent = packBusy ? 'Drawing…' : ready ? `Play the ${ready.tier} pack on ${byId[C.asset].ticker} ${C.side}` : 'Open a pack';
+}
+let packLink = '';
+$('#packGo').onclick = async () => {
+  if (packBusy) return;
+  if (!(await connect(true))) return;
+  const ready = api.pack();
+  if (ready) {
+    if (!api.marketOpen(C.asset)) { toast(`${byId[C.asset].ticker} is closed right now`); return; }
+    packBusy = true; renderPack(true);
+    try { const r = await api.startRun({ mode: 'solo', assetId: C.asset, side: C.side, pack: true }); closeSheet(true); enterGame(r); }
+    catch (e) { toast(e.message); }
+    finally { packBusy = false; renderPack(); }
+    return;
+  }
+  packBusy = true; renderPack(true);
+  try { const p = await api.openPack(); packLink = p.url || ''; sound.cash(); toast(`${p.tier} pack: your free climb goes up to ${levTxt(p.maxLeverage)}`); }
+  catch (e) { toast(e.message); }
+  finally { packBusy = false; renderPack(true); }
+};
