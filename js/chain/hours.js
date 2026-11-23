@@ -43,3 +43,11 @@ export function inSession(hours, ms = Date.now()) {
   const s = SCHEDULES[hours];
   return !s || s.some((x) => scheduleOpen(x, ms));
 }
+
+/// When a closed market opens next (ms), scanning ahead minute by minute up to a week.
+export function nextOpen(hours, ms = Date.now()) {
+  if (!SCHEDULES[hours]) return null;
+  let t = Math.ceil(ms / 60000) * 60000;
+  for (let i = 0; i < 7 * 24 * 60; i += 5, t += 5 * 60000) if (inSession(hours, t)) return t;
+  return null;
+}
