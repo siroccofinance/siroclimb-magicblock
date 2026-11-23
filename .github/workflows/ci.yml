@@ -32,6 +32,8 @@ jobs:
       - name: Syntax of every module
         run: for f in js/*.js js/chain/*.js api/*.js ops/*.mjs ops/lib/*.mjs ops/test/*.mjs; do node --check "$f"; done
       - name: Client loads and builds instructions
-        run: node --no-deprecation -e "import('./js/chain/ix.js').then(m => { const { PublicKey } = require('@solana/web3.js'); const k = PublicKey.unique(); m.ix.tickRun(k, 0); m.ix.cashOut(k, k, 4); m.ix.startRun(k, k, { asset: 1, side: 0, stake: 10n }, null); m.ix.joinRound(k, k, 7, 1, null); console.log('ok'); })"
+        run: |
+          node --no-deprecation -e "import('./js/chain/ix.js').then(m => { const { PublicKey } = require('@solana/web3.js'); const k = PublicKey.unique(); m.ix.tickRun(k, 0); m.ix.cashOut(k, k, 4); m.ix.startRun(k, k, { asset: 1, side: 0, stake: 10n }, null); m.ix.joinRound(k, k, 7, 1, null); console.log('ok'); })"
       - name: Market sessions
-        run: node -e "import('./js/chain/hours.js').then(h => { const t = (s) => Date.parse(s); if (h.inSession('us-equity', t('2026-11-28T15:00:00Z')) || !h.inSession('us-equity', t('2026-11-25T15:00:00Z')) || h.inSession('metal', t('2026-11-23T22:30:00Z'))) process.exit(1); console.log('ok'); })"
+        run: |
+          node -e "import('./js/chain/hours.js').then(h => { const t = (s) => Date.parse(s); if (h.inSession('us-equity', t('2026-11-28T15:00:00Z')) || !h.inSession('us-equity', t('2026-11-25T15:00:00Z')) || h.inSession('metal', t('2026-11-23T22:30:00Z'))) process.exit(1); console.log('ok'); })"
