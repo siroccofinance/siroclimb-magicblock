@@ -11,7 +11,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const shot = n => pg.screenshot({ path: `${out}/${tag}-${n}.png` });
 const scr = () => pg.evaluate(() => document.body.dataset.screen);
 // lobby buttons (long green, short red, sliding thumb) and the share to X flow
-await pg.goto(`http://localhost:${srv.address().port}/#play`, { waitUntil: 'networkidle2' });
+await pg.goto(`http://localhost:${srv.address().port}/?mock#play`, { waitUntil: 'networkidle2' });
 await wait(2200); if (await pg.$('.sheet:not([hidden]) .sheet__ok')) { await pg.click('.sheet__ok'); await wait(700); }
 await pg.click('#side [data-v=long]'); await wait(900); await shot('1long');
 await pg.click('#side [data-v=short]'); await wait(300); await shot('2shortmid'); await wait(700); await shot('3short');
