@@ -15,6 +15,7 @@ import { Climber, readPrice } from '../js/chain/climber.js';
 import { MARKETS, MAX_PRICE_AGE, PROGRAM_ID, ROUND, ROUND_CYCLE, RUN, RUN_SECONDS } from '../js/chain/config.js';
 import { decodeRun, discriminator } from '../js/chain/codec.js';
 import { pushOnce } from '../js/chain/relay.js';
+import { inSession } from '../js/chain/hours.js';
 import { send, sleep } from '../js/chain/tx.js';
 import { friendlyError } from '../js/chain/errors.js';
 import { uniqueHandles } from '../js/chain/handles.js';
@@ -45,7 +46,7 @@ const relayer = namedKeypair('relayer');
 
 const openMask = async () => {
   let m = 0;
-  for (let i = 0; i < MARKETS.length; i++) { const p = await readPrice(er, i).catch(() => null); if (p && Date.now() / 1000 - p.ts <= MAX_PRICE_AGE) m |= 1 << i; }
+  for (let i = 0; i < MARKETS.length; i++) { const p = await readPrice(er, i).catch(() => null); if (p && Date.now() / 1000 - p.ts <= MAX_PRICE_AGE && inSession(MARKETS[i].hours)) m |= 1 << i; }
   return m;
 };
 const busy = new Set();
