@@ -25,6 +25,7 @@ import { profilePda, roundPda, roundSlotPda, runPda } from './chain/pdas.js';
 import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor, uniqueHandles } from './chain/handles.js';
+import { inSession } from './chain/hours.js';
 import { dropSession, injectedWallets, loadSession, openWallet, saveSession } from './chain/wallet.js';
 
 const base = new Connection(BASE_RPC, 'confirmed');
@@ -42,7 +43,8 @@ export { PACKS };
 
 // ─────────────────────────────────────────────────────────────── prices
 const feeds = MARKETS.map((m) => ({ m, raw: 0, price: 0, ts: 0, hist: [], subs: new Set() }));
-const isOpen = (f) => f.ts > 0 && Date.now() / 1000 - f.ts <= MAX_PRICE_AGE;
+/// Open = inside a trading session (Pyth's schedule) and the price is fresh.
+const isOpen = (f) => f.ts > 0 && Date.now() / 1000 - f.ts <= MAX_PRICE_AGE && inSession(f.m.hours);
 const toUsd = (asset, raw) => raw * 10 ** MARKETS[asset].exponent;
 async function pollPrices() {
   try {

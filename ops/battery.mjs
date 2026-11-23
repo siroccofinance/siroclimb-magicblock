@@ -23,6 +23,7 @@ import { decodeRun } from '../js/chain/codec.js';
 import { ix } from '../js/chain/ix.js';
 import { profilePda, runPda, roundPda } from '../js/chain/pdas.js';
 import { pushOnce } from '../js/chain/relay.js';
+import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
 import { uniqueHandles } from '../js/chain/handles.js';
 import { KEY_DIR, adminKeypair, baseConnection, erConnection, namedKeypair, short } from './lib/env.mjs';
@@ -67,7 +68,7 @@ async function openMarkets() {
   const now = Date.now() / 1000, out = [];
   for (let i = 0; i < MARKETS.length; i++) {
     const p = await readPrice(er, i).catch(() => null);
-    if (p && now - p.ts <= MAX_PRICE_AGE) out.push(i);
+    if (p && now - p.ts <= MAX_PRICE_AGE && inSession(MARKETS[i].hours)) out.push(i);
   }
   return out;
 }
