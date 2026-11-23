@@ -12,6 +12,7 @@
 //   wallets()                                → [{ id, name }]     injected wallets, plus a devnet burner
 //   listAssets()                             → Asset[]            { id, name, ticker, kind: 'stock' | 'metal' | 'fx', hours }
 //   marketOpen(assetId)                      → boolean            false outside the market's trading hours
+//   marketOpensAt(assetId)                  → ms | null          next session start of a closed market
 //   subscribePrice(assetId, cb)              → unsubscribe()      cb({ price, ts })
 //   history(assetId, seconds)                → [{ price, ts }]    recent ticks, oldest first
 //   rules                                    → { ladder: number[], stepEvery: s, duration: s, roundEntry, prizeSplit }
@@ -53,6 +54,7 @@ export const disconnect = () => impl.disconnect();
 export const wallets = opt('wallets', () => [{ id: 'demo', name: 'Demo wallet' }]);
 export const listAssets = () => impl.listAssets();
 export const marketOpen = opt('marketOpen', () => true);
+export const marketOpensAt = opt('marketOpensAt', () => null);
 export const subscribePrice = (...a) => impl.subscribePrice(...a);
 export const history = (...a) => impl.history(...a);
 export const startRun = (...a) => impl.startRun(...a);
