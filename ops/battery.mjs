@@ -193,11 +193,13 @@ for (let w = 1; w <= WAVES; w++) {
 }
 
 // ------------------------------------------------------------------ rounds
+let lastRoundId = 0;
 async function playRound(k) {
   const markets = await openMarkets();
   if (!markets.length) { say('every market is closed: skipping rounds'); return; }
   const now = () => Date.now() / 1000;
-  let id = Math.floor(now() / ROUND_CYCLE) + 1;
+  let id = Math.max(Math.floor(now() / ROUND_CYCLE) + 1, lastRoundId + 1);
+  lastRoundId = id;
   const opens = id * ROUND_CYCLE, starts = opens + 20, tag = `round ${id}`;
   while (now() < opens - 25) await sleep(500);
   const mask = markets.reduce((m, i) => m | (1 << i), 0);
