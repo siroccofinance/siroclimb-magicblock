@@ -3,6 +3,7 @@
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
 import { createEscalatorScene } from './sirocco-escalator-scene.js?v=5';
+import { CARD, drawCard, loadLogo, toBlob } from './share-card.js?v=1';
 
 const $ = s => document.querySelector(s);
 const body = document.body;
@@ -73,6 +74,7 @@ const haptic = p => { try { navigator.vibrate?.(p); } catch {} };
 
 // ── scene
 const stage = $('#stage');
+let repose = () => {}, wantCard = false, card = null;
 let TK = null, sc = null, idleT = 0, last = performance.now(), G = null, live = false, syncing = true;
 const film = $('#film');
 const cover = () => ({ aspect: 16 / 9, x: mobile() ? 0.64 : 0.6, y: 0.3 });
@@ -108,12 +110,14 @@ function frame(now) {
   if (sc) {
     if (TK) {
       TK.danger += (TK.dangerTo - TK.danger) * (1 - Math.exp(-dt * 4));
-      sc.trackStep(TK, dt, lvl.level); sc.trackPose(TK, now / 1000, TK.danger); bubbleFrame();
+      sc.trackStep(TK, dt, lvl.level); repose = () => sc.trackPose(TK, now / 1000, TK.danger); repose(); bubbleFrame();
       if (screen === 'ending' && TK.end && TK.end.ready) setScreen('result');
     }
-    else if (G) { G.danger += ((G.dangerTo || 0) - G.danger) * (1 - Math.exp(-dt * 4)); sc.gamePose(G, (now - G.t0) / 1000, now / 1000); }
+    else if (G) { G.danger += ((G.dangerTo || 0) - G.danger) * (1 - Math.exp(-dt * 4)); repose = () => sc.gamePose(G, (now - G.t0) / 1000, now / 1000); repose(); }
     else sc.setTime(idleT % sc.LOOP);
     sc.draw();
+    if (wantCard && (screen === 'result' || (screen === 'ending' && ended && ended.status === 'busted')))   // a fall is shot as it starts, coin still in frame
+      { wantCard = false; makeCard(grabScene()); }
   }
   if (screen === 'game' || screen === 'ending') hudFrame(dt);
   if (screen === 'game') drawSpark();
@@ -372,6 +376,7 @@ function onEnd(res) {
   setScreen('ending');
   if (bust) { sound.bust(); haptic([30, 40, 60]); } else { sound.cash(); haptic([12, 30, 12]); }
   showResult(res);
+  card = null; wantCard = true; hideTip();
   // stairs: the result waits for the scene (the box has pushed the coin, or the coin has fallen), wherever it ended
   if (TK) setTimeout(() => { if (screen === 'ending') setScreen('result'); }, 4000);
   else setTimeout(() => setScreen('result'), bust ? 1250 : 1350);
@@ -399,6 +404,7 @@ function fillRound(f) {
   if (f.prize) { sound.cash(); toast(`+${money(f.prize)} tUSDC prize`); }
 }
 $('#again').onclick = () => {
+  hideTip();
   const wash = $('#wash'); wash.classList.add('is-on');
   setTimeout(() => {
     run = null; upd = null; ended = null; $('#cash').disabled = false;
@@ -409,19 +415,74 @@ $('#again').onclick = () => {
     requestAnimationFrame(() => wash.classList.remove('is-on'));
   }, 430);
 };
-$('#share').onclick = () => {
-  if (!ended) return;
+// ── share: a picture of the end of the run (coin in the middle, result over it) goes with the post
+// the scene is drawn once more at card size, in the same frame, so the picture is sharp on every screen
+function grabScene() {
+  const c = document.createElement('canvas'); c.width = CARD.w; c.height = CARD.h;
+  const keep = [sc.L.DOLLY, sc.L.FOLLOW_T];
+  try {
+    sc.L.DOLLY = 0.55; sc.L.FOLLOW_T = 0.75;          // same framing on every device (phones keep the camera further back)
+    sc.setSize(CARD.w, CARD.h, 1, { aspect: 16 / 9, x: 0.5, y: 0.5 }); repose(); sc.draw();
+    c.getContext('2d').drawImage(sc.canvas, 0, 0, CARD.w, CARD.h);
+  } catch { return null; }
+  finally { [sc.L.DOLLY, sc.L.FOLLOW_T] = keep; sc.setSize(innerWidth, innerHeight, dpr(), cover()); repose(); sc.draw(); }
+  return c;
+}
+async function makeCard(scene) {
+  const r = ended, mine = run; if (!r || !mine) return;
+  const a = byId[mine.assetId], bust = r.status === 'busted', rd = mine.mode === 'round';
+  const d = {
+    eyebrow: bust ? 'The coin fell' : r.status === 'expired' ? "Time's up, cashed out" : 'Cashed out',
+    value: rd ? pct(r.pnlPct) : signed(r.pnl), unit: rd ? '' : 'tUSDC', win: r.pnl > 0.005,
+    side: mine.side, ticker: a.ticker, logo: await loadLogo('assets/brand/sirocco-mark-safran.svg'),
+    stats: [['Stake', `${money(mine.stake)} tUSDC`], ['Return', pct(r.pnlPct)], ['Top leverage', levTxt(r.maxLeverage)], ['Entry', price(r.entryPrice)], ['Exit', price(r.exitPrice)], ['Time', `${Math.max(1, Math.round(r.duration))}s`]],
+  };
+  const blob = await toBlob(drawCard(scene, d));
+  if (ended !== r || !blob) return;
+  card = { blob, src: URL.createObjectURL(blob), page: null };
+  api.shareCard(blob, r).then(u => { if (card && card.blob === blob) card.page = u; }).catch(() => {});
+}
+function shareText() {
   const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long';
-  const rank = round && r.rank ? ` and finished ${ord(r.rank)} in the round` : '';
+  const rank = run.mode === 'round' && r.rank ? ` and finished ${ord(r.rank)} in the round` : '';
   const text = r.status === 'busted'
     ? `My coin fell off the stairs at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker}${rank}. Rematch incoming 🪙`
     : r.pnl > 0.005 ? `Climbed to ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} and cashed out ${pct(r.pnlPct)}${rank} 🪙📈\n\nCan you climb higher on Siroclimb?`
     : `Cashed out at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} before the stairs gave way${rank} 🪙\n\nYour turn on Siroclimb`;
-  const url = location.origin + location.pathname.replace(/(play|index)\.html$/, '');
-  const href = 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
-  const w = window.open(href, '_blank', 'noopener,noreferrer');
-  if (!w) location.href = href;   // popup blocked: go there in this tab
+  const url = (card && card.page) || location.origin + location.pathname.replace(/(play|index)\.html$/, '');
+  return { text, url };
+}
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+let tipT = 0;
+function showTip(copied, href) {
+  const t = $('#sharetip');
+  $('#tipImg').src = card ? card.src : '';
+  $('#tipDl').href = card ? card.src : '#';
+  $('#tipMsg').innerHTML = copied ? `Picture copied. Press <kbd>${isMac ? '⌘' : 'Ctrl'}</kbd> <kbd>V</kbd> in your post to add it.` : 'Save the picture and add it to your post.';
+  $('#tipX').href = href;
+  t.hidden = false; requestAnimationFrame(() => t.classList.add('is-on'));
+  clearTimeout(tipT); tipT = setTimeout(hideTip, 12000);
+}
+function hideTip() { const t = $('#sharetip'); t.classList.remove('is-on'); clearTimeout(tipT); tipT = setTimeout(() => { t.hidden = true; }, 300); }
+$('#tipClose').onclick = hideTip;
+$('#share').onclick = async () => {
+  if (!ended) return;
   sound.tick();
+  const { text, url } = shareText();
+  const href = 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
+  // hosted card: the link itself carries the picture
+  if (card && card.page) { if (!window.open(href, '_blank', 'noopener')) location.href = href; return; }
+  // phones: the system share sheet takes the picture and the text straight into the X app
+  const file = card && new File([card.blob], 'siroclimb.png', { type: 'image/png' });
+  if (file && matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: `${text}\n${url}` }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  // desktop: the picture goes to the clipboard, X opens with the post written, one paste adds the picture
+  let copied = false;
+  if (card && navigator.clipboard && window.ClipboardItem) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': card.blob })]); copied = true; } catch {} }
+  window.open(href, '_blank', 'noopener');
+  if (card) showTip(copied, href);
 };
 
 // ── sparkline: last 60 s, scrolls smoothly, entry line while playing
