@@ -129,6 +129,8 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | On-chain battery, rounds | `npm run battery -- 24 2 0` | two full 24-seat rounds drawn by VRF, every payout checked: 66 / 67 (one test bug, fixed) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
 | Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
+| Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
+| Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
 | Simulation flows (`?mock`) | `npm run test:solo` etc. | the original Puppeteer flows of the front |
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
