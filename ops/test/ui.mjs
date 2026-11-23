@@ -47,7 +47,25 @@ await pg.click('#go');
 await wait(800);
 if (await pg.$('#walletSheet:not([hidden])')) { await pg.screenshot({ path: 'out/ui-2wallets.png' }); await pg.click('#walletList [data-w=burner]'); }
 say('burner, onboarding…');
-if (FLOW === 'solo') {
+if (FLOW === 'pack') {
+  // a first climb onboards the burner; then the pack: VRF draw, free climb on the house
+  await until(async () => (await scr()) === 'game', 90000, 'game screen');
+  await wait(3000); await pg.click('#cash');
+  await until(async () => (await scr()) === 'result', 30000, 'result');
+  await pg.click('#again'); await wait(1500);
+  await until(() => pg.$('#packBtn:not([hidden])'), 10000, 'pack button');
+  await pg.click('#packBtn'); await wait(600);
+  await pg.click('#packGo');
+  await until(async () => /Play the/.test(await text('#packGo')), 60000, 'pack drawn');
+  say('pack', await text('#packGo'), '|', await text('.pack__tiers .is-won'));
+  await pg.screenshot({ path: 'out/ui-5pack.png' });
+  await pg.click('#packGo');
+  await until(async () => (await scr()) === 'game', 60000, 'pack climb');
+  say('pack climb, ladder top', await pg.$$eval('#gTicks li', (l) => l[l.length - 1].textContent));
+  await wait(5000); await pg.click('#cash');
+  await until(async () => (await scr()) === 'result', 30000, 'pack result');
+  say('pack result', await text('#rV'));
+} else if (FLOW === 'solo') {
   await until(async () => (await scr()) === 'game', 90000, 'game screen');
   say('climbing', await text('#hT'), await text('#hP'));
   await wait(9000);
