@@ -9,7 +9,11 @@
     "test:round": "node tests/round.mjs . out",
     "test:intro": "node tests/intro.mjs . out",
     "test:ends": "node tests/ends.mjs . out",
-    "build:vendor": "esbuild js/vendor/entry.mjs --bundle --format=esm --platform=browser --minify --target=es2020 --define:global=globalThis --outfile=js/vendor/solana.mjs --legal-comments=none"
+    "build:vendor": "esbuild js/vendor/entry.mjs --bundle --format=esm --platform=browser --minify --target=es2020 --define:global=globalThis --outfile=js/vendor/solana.mjs --legal-comments=none",
+    "battery": "node --no-deprecation ops/battery.mjs",
+    "keeper": "node --no-deprecation ops/keeper.mjs",
+    "test:ui": "node ops/test/ui.mjs",
+    "test:smoke": "node ops/test/smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",
