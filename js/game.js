@@ -249,6 +249,12 @@ function renderLobby() {
   $('#entryV').textContent = round.entry;
   renderGo();
 }
+// "opens in 3h" for a closed market, from Pyth's session schedule
+function opensIn(id) {
+  const at = api.marketOpensAt(id); if (!at) return '';
+  const m = Math.max(1, Math.round((at - Date.now()) / 60000));
+  return m < 60 ? ` (opens in ${m} min)` : m < 48 * 60 ? ` (opens in ${Math.round(m / 60)} h)` : ` (opens ${new Date(at).toLocaleDateString([], { weekday: 'long' })})`;
+}
 // markets outside their trading hours: stale feed, no new climbs
 function renderClosed() {
   for (const [id, c] of Object.entries(chip)) {
@@ -263,7 +269,7 @@ function renderGo() {
     const open = api.marketOpen(C.asset);
     go.disabled = busy || !open;
     go.textContent = busy ? 'Starting…' : !open ? 'Market closed' : !api.account() ? 'Connect to climb' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
-    meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x` : `${byId[C.asset].ticker} is outside its trading hours. Pick an open market.`;
+    meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x` : `${byId[C.asset].ticker} is outside its trading hours${opensIn(C.asset)}. Pick an open market.`;
     return;
   }
   const r = round, pot = `${r.players} ${r.players === 1 ? 'player' : 'players'}, pot ${money(r.pot)} tUSDC`;
