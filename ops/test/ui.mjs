@@ -5,7 +5,9 @@
 import puppeteer from 'puppeteer-core';
 const URL = process.env.APP_URL || 'http://127.0.0.1:3042/';
 const FLOW = process.env.FLOW || 'solo';
-const b = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+// The burner lives in the browser profile: reuse it between runs (FRESH=1 starts from an empty wallet).
+const profileDir = process.env.FRESH ? undefined : 'out/chrome-profile';
+const b = await puppeteer.launch({ userDataDir: profileDir, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const pg = await b.newPage();
 const errs = [];
 pg.on('pageerror', (e) => { errs.push(e.message); console.log('ERR', e.message); });
