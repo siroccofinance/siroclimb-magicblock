@@ -170,6 +170,10 @@ walletMenu.onclick = async e => {
   const act = e.target.dataset.act; walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false);
   if (act === 'copy') { try { await navigator.clipboard.writeText(api.account()); toast('Address copied'); } catch { toast(api.account()); } }
   if (act === 'out') { api.disconnect(); renderWallet(); toast('Wallet disconnected'); }
+  if (act === 'name') {
+    const next = prompt('Your handle on the leaderboard (3 to 16 characters)', api.user().name);
+    if (next && next !== api.user().name) { try { toast(`Handle set to ${await api.setName(next)}`); } catch (e) { toast(e.message); } }
+  }
 };
 addEventListener('click', () => { if (!walletMenu.hidden) { walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false); } });
 
