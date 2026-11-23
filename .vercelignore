@@ -1,0 +1,6 @@
+# The deployed site is static files + api/ functions: keep sources and tooling out of uploads.
+/chain
+/3d
+/ops
+/tests
+/out
