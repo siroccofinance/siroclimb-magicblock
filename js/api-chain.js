@@ -188,6 +188,19 @@ export async function init() {
   return { user: user(), balance: bal };
 }
 
+/// Change the on-chain handle (the wallet signs: the profile belongs to it).
+export async function setName(name) {
+  if (!climber) throw new Error('Connect first');
+  const clean = String(name).trim().slice(0, 16);
+  if (!/^[\w.\-]{3,16}$/.test(clean)) throw new Error('3 to 16 letters, digits, dots, dashes or underscores');
+  try {
+    await send(base, [ix.setName(wallet.publicKey, clean)], [wallet], { label: 'set name' });
+    profile = await climber.profile();
+    boardCache.at = 0;
+    return profile.name;
+  } catch (e) { throw fail(e); }
+}
+
 export async function faucet() {
   if (!climber) await connect();
   try {
