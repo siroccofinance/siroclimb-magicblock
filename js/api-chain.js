@@ -25,7 +25,7 @@ import { profilePda, roundPda, roundSlotPda, runPda } from './chain/pdas.js';
 import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor, uniqueHandles } from './chain/handles.js';
-import { inSession } from './chain/hours.js';
+import { inSession, nextOpen } from './chain/hours.js';
 import { dropSession, injectedWallets, loadSession, openWallet, saveSession } from './chain/wallet.js';
 
 const base = new Connection(BASE_RPC, 'confirmed');
@@ -74,6 +74,8 @@ setInterval(() => {
 
 export const listAssets = () => MARKETS.map(({ id, name, ticker, kind, hours }) => ({ id, name, ticker, kind, hours }));
 export const marketOpen = (id) => isOpen(feeds[marketIndex(id)]);
+/// When a closed market's next session starts (ms), or null if unknown.
+export const marketOpensAt = (id) => nextOpen(MARKETS[marketIndex(id)].hours);
 export function subscribePrice(id, cb) {
   const f = feeds[marketIndex(id)];
   f.subs.add(cb);
