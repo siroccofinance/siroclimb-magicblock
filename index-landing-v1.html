@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Siroclimb</title>
+  <meta name="description" content="Siroclimb, the Sirocco climbing game. Every step adds leverage up to 4x on live prices. Cash out anytime, your stake is the most you can lose.">
+  <meta name="theme-color" content="#c2552d">
+  <link rel="icon" href="assets/brand/sirocco-mark-safran.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  <link rel="preload" as="image" href="assets/poster/siroclimb-hero-poster-1920x1080.webp">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero__media" aria-hidden="true">
+        <video class="hero__video" autoplay muted loop playsinline preload="auto" poster="assets/poster/siroclimb-hero-poster-1920x1080.webp">
+          <source src="assets/video/siroclimb-hero-2560x1440.webm" type="video/webm" media="(min-width: 1600px)">
+          <source src="assets/video/siroclimb-hero-2560x1440.mp4" type="video/mp4" media="(min-width: 1600px)">
+          <source src="assets/video/siroclimb-hero-1920x1080.webm" type="video/webm">
+          <source src="assets/video/siroclimb-hero-1920x1080.mp4" type="video/mp4">
+        </video>
+      </div>
+
+      <div class="hero__content">
+        <div class="hero__text">
+          <h1 id="hero-title" class="hero__title">Climb higher with every step</h1>
+          <p class="hero__lead">Each step adds leverage, up to 4x. Cash out whenever you want, your stake is the most you can lose.</p>
+        </div>
+        <a class="hero__cta" href="play.html">Start playing</a>
+      </div>
+    </section>
+  </main>
+  <div class="wash" aria-hidden="true"></div>
+  <script>
+    // some browsers ignore autoplay until the media is ready: nudge it, quietly
+    const v = document.querySelector('.hero__video');
+    const go = () => v.play().catch(() => {});
+    v.addEventListener('canplay', go, { once: true }); go();
+  </script>
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+  <script type="module" src="js/main.js?v=2"></script>
+</body>
+</html>
