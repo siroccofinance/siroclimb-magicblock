@@ -504,6 +504,186 @@ pub mod siroclimb {
         msg!("pack tier {}", p.pack_tier);
         Ok(())
     }
+
+    // ========================================================= ephemeral rollup
+
+    /// Start the climb on the rollup: the entry is the live oracle price.
+    /// Signed by the climb's session key (anyone may do it after a grace
+    /// period). With `crank`, the rollup schedules `tick_run` every 500 ms.
+    pub fn begin_run(ctx: Context<BeginRun>, crank: bool) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let run_info = ctx.accounts.run.to_account_info();
+        let run = &mut ctx.accounts.run;
+        require!(run.status == RUN_STAKED, ClimbError::BadStatus);
+        let signer = ctx.accounts.payer.key();
+        require!(signer == run.session || signer == run.player || now > run.created_ts + BEGIN_GRACE, ClimbError::Unauthorized);
+        let (price, ts) = read_feed(&ctx.accounts.feed, run.asset)?;
+        require!(now - ts <= MAX_PRICE_AGE, ClimbError::StalePrice);
+        run.entry_price = price;
+        run.last_price = price;
+        run.start_ts = now;
+        run.last_tick_ts = now;
+        run.status = RUN_LIVE;
+        if crank {
+            let task_id = task_id_for(&run_info.key(), run.nonce as u64);
+            run.task_id = task_id;
+            let tick = Instruction {
+                program_id: crate::ID,
+                accounts: vec![AccountMeta::new(run_info.key(), false), AccountMeta::new_readonly(ctx.accounts.feed.key(), false)],
+                data: anchor_lang::InstructionData::data(&crate::instruction::TickRun {}),
+            };
+            schedule(&ctx.accounts.payer.to_account_info(), &run_info, &ctx.accounts.feed.to_account_info(), task_id, tick)?;
+        }
+        Ok(())
+    }
+
+    /// One step of a climb along the oracle. Scheduled by `begin_run`, and
+    /// callable by anyone: it only moves the climb forward with the price.
+    pub fn tick_run(ctx: Context<TickRun>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let run = &mut ctx.accounts.run;
+        if run.status != RUN_LIVE {
+            return Ok(());
+        }
+        let price = fresh_or(&ctx.accounts.feed, run.asset, run.last_price, now)?;
+        run.advance(price, now);
+        Ok(())
+    }
+
+    /// Cash out: one last step at the live price, then the climb is committed
+    /// and handed back to Solana in the same transaction. Session key, no fee.
+    pub fn cash_out(ctx: Context<CashOut>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        {
+            let run = &mut ctx.accounts.run;
+            let signer = ctx.accounts.payer.key();
+            require!(signer == run.session || signer == run.player, ClimbError::Unauthorized);
+            require!(run.status == RUN_LIVE || run.is_over(), ClimbError::BadStatus);
+            let price = fresh_or(&ctx.accounts.feed, run.asset, run.last_price, now)?;
+            run.advance(price, now);
+            if run.status == RUN_LIVE {
+                run.status = RUN_CASHED;
+                run.end_ts = now;
+            }
+        }
+        commit_back(&ctx.accounts.run, &ctx.accounts.payer, &ctx.accounts.magic_context, &ctx.accounts.magic_program)
+    }
+
+    /// End a climb nobody cashed out (busted, or past the bell) and hand it
+    /// back to Solana. A staked climb that never started is refunded. Permissionless.
+    pub fn finish_run(ctx: Context<FinishRun>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        {
+            let run = &mut ctx.accounts.run;
+            if run.status == RUN_LIVE && now >= run.start_ts + RUN_SECONDS {
+                let price = fresh_or(&ctx.accounts.feed, run.asset, run.last_price, now)?;
+                run.advance(price, now);
+                if run.status == RUN_LIVE && now >= run.start_ts + RUN_SECONDS + FINISH_GRACE {
+                    run.status = RUN_EXPIRED;
+                    run.end_ts = run.start_ts + RUN_SECONDS;
+                }
+            }
+            if run.status == RUN_STAKED && now > run.created_ts + STALE_SECONDS {
+                run.status = RUN_EXPIRED;
+                run.value = if run.mode == MODE_PACK { 0 } else { run.stake };
+                run.end_ts = now;
+            }
+            require!(run.is_over(), ClimbError::BadStatus);
+        }
+        commit_back(&ctx.accounts.run, &ctx.accounts.payer, &ctx.accounts.magic_context, &ctx.accounts.magic_program)
+    }
+
+    /// The bell: every seat starts at the same live price. Permissionless.
+    pub fn go_live(ctx: Context<GoLive>, id: u64, crank: bool) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let round_info = ctx.accounts.round.to_account_info();
+        let task_id;
+        {
+            let mut r = ctx.accounts.round.load_mut()?;
+            require!(r.id == id && r.status == ROUND_OPEN, ClimbError::BadStatus);
+            require!(now >= r.starts_at, ClimbError::TooEarly);
+            let (price, ts) = read_feed(&ctx.accounts.feed, r.asset)?;
+            require!(now - ts <= MAX_PRICE_AGE || now > r.starts_at + 15, ClimbError::StalePrice);
+            r.entry_price = price;
+            r.last_price = price;
+            r.live_ts = now;
+            r.last_tick_ts = now;
+            r.status = ROUND_LIVE;
+            let n = r.players as usize;
+            for e in r.entries[..n].iter_mut() {
+                e.status = RUN_LIVE;
+            }
+            task_id = task_id_for(&round_info.key(), id);
+            r.task_id = if crank { task_id } else { 0 };
+        }
+        if crank {
+            let tick = Instruction {
+                program_id: crate::ID,
+                accounts: vec![AccountMeta::new(round_info.key(), false), AccountMeta::new_readonly(ctx.accounts.feed.key(), false)],
+                data: anchor_lang::InstructionData::data(&crate::instruction::TickRound {}),
+            };
+            schedule(&ctx.accounts.payer.to_account_info(), &round_info, &ctx.accounts.feed.to_account_info(), task_id, tick)?;
+        }
+        Ok(())
+    }
+
+    /// One step of every live seat along the oracle. Scheduled, and permissionless.
+    pub fn tick_round(ctx: Context<TickRound>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mut r = ctx.accounts.round.load_mut()?;
+        if r.status != ROUND_LIVE {
+            return Ok(());
+        }
+        let price = fresh_or(&ctx.accounts.feed, r.asset, r.last_price, now)?;
+        r.advance(price, now);
+        Ok(())
+    }
+
+    /// Cash out of a round at the live price (session key, no fee). The round
+    /// ends early once nobody is left climbing.
+    pub fn cash_out_round(ctx: Context<CashOutRound>, id: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let mut r = ctx.accounts.round.load_mut()?;
+        require!(r.id == id, ClimbError::BadRound);
+        let i = r.session_index(&ctx.accounts.signer.key()).ok_or(ClimbError::NotInRound)?;
+        if r.status == ROUND_LIVE {
+            let price = fresh_or(&ctx.accounts.feed, r.asset, r.last_price, now)?;
+            r.advance(price, now);
+        }
+        require!(r.status == ROUND_LIVE || r.status == ROUND_FINISHED, ClimbError::BadStatus);
+        if r.entries[i].status == RUN_LIVE {
+            r.entries[i].status = RUN_CASHED;
+            r.entries[i].end_ts = now;
+        }
+        let n = r.players as usize;
+        if r.status == ROUND_LIVE && r.entries[..n].iter().all(|e| e.status != RUN_LIVE) {
+            r.status = ROUND_FINISHED;
+            r.rank();
+        }
+        Ok(())
+    }
+
+    /// The round is over: commit it and hand it back to Solana. Permissionless.
+    pub fn finish_round(ctx: Context<FinishRound>, id: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        {
+            let mut r = ctx.accounts.round.load_mut()?;
+            require!(r.id == id, ClimbError::BadRound);
+            if r.status == ROUND_LIVE && now >= r.live_ts + RUN_SECONDS {
+                let price = fresh_or(&ctx.accounts.feed, r.asset, r.last_price, now)?;
+                r.advance(price, now);
+            }
+            require!(r.status == ROUND_FINISHED, ClimbError::BadStatus);
+        }
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.round.to_account_info()])
+        .build_and_invoke()?;
+        Ok(())
+    }
 }
 
 // ==================================================================== helpers
@@ -860,4 +1040,91 @@ pub struct OpenPack<'info> {
 pub struct ApplyPackCtx<'info> {
     #[account(mut)]
     pub profile: Box<Account<'info, Profile>>,
+}
+
+#[derive(Accounts)]
+pub struct BeginRun<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [RUN_SEED, run.player.as_ref()], bump = run.bump)]
+    pub run: Box<Account<'info, Run>>,
+    /// CHECK: pinned to the climb's market and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+    /// CHECK: MagicBlock program, for ScheduleTask.
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct TickRun<'info> {
+    #[account(mut, seeds = [RUN_SEED, run.player.as_ref()], bump = run.bump)]
+    pub run: Box<Account<'info, Run>>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct CashOut<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [RUN_SEED, run.player.as_ref()], bump = run.bump)]
+    pub run: Box<Account<'info, Run>>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct FinishRun<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [RUN_SEED, run.player.as_ref()], bump = run.bump)]
+    pub run: Box<Account<'info, Run>>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(id: u64)]
+pub struct GoLive<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [ROUND_SEED, &[(id % ROUND_SLOTS) as u8]], bump)]
+    pub round: AccountLoader<'info, Round>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+    /// CHECK: MagicBlock program, for ScheduleTask.
+    #[account(address = MAGIC_PROGRAM_ID)]
+    pub magic_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct TickRound<'info> {
+    #[account(mut)]
+    pub round: AccountLoader<'info, Round>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(id: u64)]
+pub struct CashOutRound<'info> {
+    pub signer: Signer<'info>,
+    #[account(mut, seeds = [ROUND_SEED, &[(id % ROUND_SLOTS) as u8]], bump)]
+    pub round: AccountLoader<'info, Round>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
+}
+
+#[commit]
+#[derive(Accounts)]
+#[instruction(id: u64)]
+pub struct FinishRound<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [ROUND_SEED, &[(id % ROUND_SLOTS) as u8]], bump)]
+    pub round: AccountLoader<'info, Round>,
+    /// CHECK: pinned and owner-checked in `read_feed`.
+    pub feed: UncheckedAccount<'info>,
 }
