@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+out/
+*.log
+# PNG frame sequences from the 3D renders stay local (several GB)
+3d/frames*/
+3d/master-*/
