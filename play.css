@@ -454,3 +454,18 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 @media (prefers-reduced-motion: reduce) { .seg.is-ready .seg__thumb, .seg__thumb::after, .cta::after { transition: none; animation: none; } }
 .cta, .ghost { white-space: nowrap; }
 @media (max-width: 767px) { .result .go .ghost { flex: none; padding: 0 18px; } .result .go .cta { min-width: 0; padding: 0 16px; } }
+
+/* share tip: the card preview and how to add it to the post */
+.sharetip { position: fixed; z-index: 41; right: max(var(--x), 16px); top: calc(var(--top) + 4px); width: min(380px, calc(100vw - 32px)); display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: center;
+  padding: 12px 40px 12px 12px; border-radius: 14px; background: #fff; color: var(--ink-d); box-shadow: 0 24px 50px -20px rgba(43, 20, 10, .65);
+  opacity: 0; transform: translateY(-8px); transition: opacity .25s var(--ease), transform .4s var(--ease-out); }
+.sharetip.is-on { opacity: 1; transform: none; }
+.sharetip[hidden] { display: none; }
+.sharetip img { width: 112px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; background: var(--bg); }
+.sharetip p { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 500; }
+.sharetip kbd { font: inherit; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: rgba(43, 33, 26, .08); border: 1px solid rgba(43, 33, 26, .12); }
+.sharetip__links { display: flex; gap: 14px; margin-top: 6px; font-size: 13px; }
+.sharetip__links a { color: #9a4a26; font-weight: 600; text-decoration: none; }
+.sharetip__links a:hover { text-decoration: underline; }
+.sharetip__x { position: absolute; top: 6px; right: 6px; color: rgba(43, 33, 26, .5); }
+.sharetip__x:hover { background: rgba(43, 33, 26, .07); color: var(--ink-d); }

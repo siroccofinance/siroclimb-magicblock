@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="play.css?v=7">
+  <link rel="stylesheet" href="play.css?v=8">
 </head>
 <body data-screen="intro" data-mode="solo">
   <div class="stage" id="stage" aria-hidden="true">
@@ -184,6 +184,14 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sharetip" id="sharetip" role="status" aria-live="polite" hidden>
+    <img id="tipImg" alt="Your Siroclimb result card">
+    <div class="sharetip__body">
+      <p id="tipMsg"></p>
+      <div class="sharetip__links"><a id="tipDl" download="siroclimb.png" href="#">Save picture</a><a id="tipX" target="_blank" rel="noopener" href="#">Open X again</a></div>
+    </div>
+    <button class="icon sharetip__x" id="tipClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
   <div class="wash" id="wash" aria-hidden="true"></div>
   <script>
     // deep link straight to the game: cover the stage until the live scene is drawing
@@ -193,6 +201,6 @@
   </script>
 
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
-  <script type="module" src="js/game.js?v=8"></script>
+  <script type="module" src="js/game.js?v=11"></script>
 </body>
 </html>
