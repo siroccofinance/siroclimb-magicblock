@@ -156,11 +156,25 @@ walletBtn.onclick = e => {
   e.stopPropagation();
   if (!api.account()) return connect();
   const open = walletMenu.hidden; walletMenu.hidden = !open; walletBtn.setAttribute('aria-expanded', open);
+  if (open) renderWho();
 };
+// who you are on chain: handle, and how long the game session key lasts
+async function renderWho() {
+  const el = $('#walletWho'), u = api.user();
+  walletMenu.querySelectorAll('[data-chain]').forEach(b => { b.hidden = api.mock; });
+  el.innerHTML = `<b>${u.name}</b>`;
+  const s = await api.sessionInfo();
+  if (s) el.innerHTML = `<b>${u.name}</b>Session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${s.sol.toFixed(3)} SOL for fees`;
+}
 walletMenu.onclick = async e => {
   const act = e.target.dataset.act; walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false);
   if (act === 'copy') { try { await navigator.clipboard.writeText(api.account()); toast('Address copied'); } catch { toast(api.account()); } }
   if (act === 'out') { api.disconnect(); renderWallet(); toast('Wallet disconnected'); }
+  if (act === 'explorer') window.open(`https://explorer.solana.com/address/${api.account()}?cluster=devnet`, '_blank', 'noopener');
+  if (act === 'name') {
+    const next = prompt('Your handle on the leaderboard (3 to 16 characters)', api.user().name);
+    if (next && next !== api.user().name) { try { toast(`Handle set to ${await api.setName(next)}`); } catch (e) { toast(e.message); } }
+  }
 };
 addEventListener('click', () => { if (!walletMenu.hidden) { walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false); } });
 
