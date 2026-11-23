@@ -3,8 +3,10 @@
 //! a round ranks its players and splits its pot, profiles and leverage packs.
 use anchor_lang::prelude::*;
 
-/// BTC, ETH, SOL, TSLA, NVDA, AAPL, in that order everywhere.
-pub const ASSETS: usize = 6;
+/// TSLAx, NVDAx, AAPLx, XAU (gold), GBP/USD, in that order everywhere.
+pub const ASSETS: usize = 5;
+/// GBP/USD has no MagicBlock feed on the rollups: its price lives in a relay account.
+pub const RELAY_ASSET: u8 = 4;
 
 /// Leverage ladder in tenths: 1x, 1.5x, 2x ... 4x, one step every 6 s.
 pub const LADDER: [u16; 7] = [10, 15, 20, 25, 30, 35, 40];
@@ -12,12 +14,12 @@ pub const TOP_STEP: u8 = (LADDER.len() - 1) as u8;
 pub const STEP_SECONDS: i64 = 6;
 pub const RUN_SECONDS: i64 = 60;
 
-/// Real minute-scale moves are tiny (BTC moves about 0.1 % in three minutes),
-/// so each market's move is magnified before the ladder's leverage applies:
-/// with a boost of 70 a 0.1 % move of BTC moves the climb like a 7 % move at
-/// 1x. Tuned per asset from the live feeds' per-second volatility, so every
-/// market plays about as lively.
-pub const BOOST: [u32; ASSETS] = [70, 55, 35, 80, 25, 70];
+/// Real minute-scale moves are tiny (Tesla moves about 0.07 % in three
+/// minutes, gold and the pound far less), so each market's move is magnified
+/// before the ladder's leverage applies: with a boost of 90 a 0.1 % move of
+/// TSLAx moves the climb like a 9 % move at 1x. Tuned per market from the live
+/// feeds' per-second volatility, so every market plays about as lively.
+pub const BOOST: [u32; ASSETS] = [90, 25, 90, 180, 400];
 
 /// Fixed point of price returns: 1e9 = +100 %.
 pub const PPB: i128 = 1_000_000_000;
@@ -480,11 +482,6 @@ pub fn pack_tier_from(randomness: &[u8; 32]) -> u8 {
     0
 }
 
-/// Pick a round's market from 32 bytes of randomness.
-pub fn asset_from(randomness: &[u8; 32]) -> u8 {
-    (u64::from_le_bytes(randomness[8..16].try_into().unwrap()) % ASSETS as u64) as u8
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,8 +538,8 @@ mod tests {
     #[test]
     fn run_busts_and_expires() {
         let mut r = live_run();
-        r.advance(1_001_000, 1012); // step 2 (2x), BTC boost 70: +14 %
-        assert_eq!(r.value, 11_400_000);
+        r.advance(1_000_500, 1012); // +0.05 % at step 2 (2x), TSLAx boost 90: +9 %
+        assert_eq!(r.value, 10_900_000);
         assert_eq!(r.max_step, 2);
         r.advance(900_000, 1013);
         assert_eq!(r.status, RUN_BUSTED);
