@@ -52,7 +52,7 @@ export const ix = {
   /// Close a retired round slot, its rent back to the admin.
   // ------------------------------------------------- Sirocco Reserve (lending pool)
   /// Open the reserve: the vault's tUSDC becomes the admin's lender position.
-  initReserve: (admin) => build('init_reserve', { admin, lender: lenderPda(admin), vault: VAULT }),
+  initReserve: (admin, vault = VAULT) => build('init_reserve', { admin, lender: lenderPda(admin), vault }),
   /// Lend `amount` (raw tUSDC) for shares; the wallet or its session key signs.
   deposit: (signer, owner, amount, sessionToken = null) =>
     build('deposit', { signer, owner, lender: lenderPda(owner), owner_usdc: ataOf(owner, mint()), vault: VAULT, session_token: sessionToken }, { amount }),
