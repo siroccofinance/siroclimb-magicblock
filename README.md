@@ -75,6 +75,8 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | Round autopilot: open, delegate, go live, finish, settle, record | ✓ | ✓ | any browser (permissionless) |
 | Practice players when a round is nearly empty | ✓ | ✓ | in the browser |
 
+**Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
+
 **Serverless.** Nothing has to run on our side for the game to work: every step of a climb or a round is permissionless, and the page itself pushes each one along (autopilot). When a round is nearly empty, up to three practice players join from your own browser: real keypairs with their own profile and test USDC, funded once by your session key, that play their seat on the rollup. The optional keeper (`npm run keeper`) only makes the lobby feel alive when nobody is online. The two serverless routes are a devnet SOL faucet for new wallets and the GBP/USD relay.
 
 ## Leverage packs
