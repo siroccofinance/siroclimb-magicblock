@@ -2,13 +2,13 @@
 
 **A one-minute leverage climb on tokenized stocks and gold, played on an Ephemeral Rollup and settled on Solana.**
 
-Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Solo climbs are played against the house; timed rounds put everyone on the same market for the same minute and split the pot 50 / 30 / 20.
+Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Climbs are solo, played against the house vault.
 
 Built for MagicBlock's Solana Blitz v10 (Entertainment Finance). Everything runs on **Solana devnet + MagicBlock's devnet Ephemeral Rollup** with live Pyth Lazer prices pushed into the rollup by MagicBlock.
 
 ## Why MagicBlock
 
-A climb is a minute of a position that changes every half second: the price moves, the leverage steps up every 6 seconds, the coin can fall at any tick, and the player can cash out at any instant. On Solana alone that is 120 paid transactions per climb, a wallet prompt per action and 400 ms slots between a click and its effect. On an Ephemeral Rollup the whole minute runs on chain, ticked by the rollup's own crank against MagicBlock's real-time Pyth prices, at zero fee and with 10 ms blocks, while the money (stakes, vault, pots, payouts) never leaves Solana. Session keys remove the last friction: one approval, then every action is instant.
+A climb is a minute of a position that changes every half second: the price moves, the leverage steps up every 6 seconds, the coin can fall at any tick, and the player can cash out at any instant. On Solana alone that is 120 paid transactions per climb, a wallet prompt per action and 400 ms slots between a click and its effect. On an Ephemeral Rollup the whole minute runs on chain, ticked by the rollup's own crank against MagicBlock's real-time Pyth prices, at zero fee and with 10 ms blocks, while the money (stakes, vault, payouts) never leaves Solana. Session keys remove the last friction: one approval, then every action is instant.
 
 ## How a climb runs
 
@@ -29,17 +29,17 @@ A climb is a minute of a position that changes every half second: the price move
    pays the position from the vault, writes the profile (bests, history)
 ```
 
-A round is the same with one account for the whole field: `open_round` asks MagicBlock's VRF for the market, players `join_round` on Solana, `delegate_round` at the bell, `go_live` sets one entry price for everyone and schedules `tick_round`, each player cashes out on the rollup, `finish_round` commits it back, `settle_round` pays the podium and `record_round` writes every profile.
+Timed rounds (everyone on the same market, a pot split 50 / 30 / 20) were removed on 24 Nov 2026 to keep the game solo; their four slot accounts were closed with `close_round_slot` and their rent returned (see [DEPLOYMENTS.md](DEPLOYMENTS.md)).
 
 ## MagicBlock features used
 
 | Feature | Where | What it does here |
 |---|---|---|
-| **Ephemeral Rollups** | `delegate_run`, `delegate_round`, `cash_out`, `finish_round` | The `Run` (solo) and `Round` accounts are delegated for the minute of play. Price ticks, leverage steps, the bust and every cash out run on the rollup at zero fee; the cash out itself commits and undelegates. Money never leaves Solana. |
-| **Cranks** (`ScheduleTask`) | `begin_run` → `tick_run`, `go_live` → `tick_round` | The climb ticks itself every 500 ms on the rollup (about 120 ticks per climb). No off-chain ticking loop. Ticks are permissionless and idempotent. |
-| **Real-time price oracle** | `begin_run`, `tick_*`, `cash_out*` | MagicBlock's Pyth Lazer feeds on the rollup (`PriCems5…`): TSLA 1435, NVDA 1314, AAPL 922, GME 1160 (the xStocks), XAU/USD 346. Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
-| **VRF** | `open_round` → `draw_round_market`, `open_pack` → `apply_pack` | The market of every round and the tier of every leverage pack are drawn by MagicBlock's VRF; callbacks are only accepted from the VRF program's scoped identity. |
-| **Session keys** (`session-keys`, `SessionTokenV2`) | `start_run`, `join_round`, `open_pack`, every rollup action | The wallet approves once. A browser-held session key, authorised by a `SessionTokenV2` and approved as SPL spender of the wallet's test USDC, signs every stake, cash out, join and pack with no wallet prompt (wallets cannot sign rollup transactions anyway). |
+| **Ephemeral Rollups** | `delegate_run`, `cash_out`, `finish_run` | The `Run` account is delegated for the minute of play. Price ticks, leverage steps, the bust and every cash out run on the rollup at zero fee; the cash out itself commits and undelegates. Money never leaves Solana. |
+| **Cranks** (`ScheduleTask`) | `begin_run` → `tick_run` | The climb ticks itself every 500 ms on the rollup (about 120 ticks per climb). No off-chain ticking loop. Ticks are permissionless and idempotent. |
+| **Real-time price oracle** | `begin_run`, `tick_run`, `cash_out`, `finish_run` | MagicBlock's Pyth Lazer feeds on the rollup (`PriCems5…`): TSLA 1435, NVDA 1314, AAPL 922, GME 1160 (the xStocks), XAU/USD 346. Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
+| **VRF** | `open_pack` → `apply_pack` | The tier of every leverage pack is drawn by MagicBlock's VRF; callbacks are only accepted from the VRF program's scoped identity. |
+| **Session keys** (`session-keys`, `SessionTokenV2`) | `start_run`, `open_pack`, every rollup action | The wallet approves once. A browser-held session key, authorised by a `SessionTokenV2` and approved as SPL spender of the wallet's test USDC, signs every stake, cash out and pack with no wallet prompt (wallets cannot sign rollup transactions anyway). |
 
 ### Markets and prices
 
@@ -48,7 +48,7 @@ A round is the same with one account for the whole field: `open_round` asks Magi
 | TSLAx, NVDAx, AAPLx, GMEx | Pyth Lazer US equity feeds on the rollup (the xStocks track their share 1:1) | Sun 20:00 to Fri 20:00 New York: pre-market, regular, post-market and overnight sessions |
 | Gold (XAU/USD) | Pyth Lazer metal feed on the rollup | Sun 18:00 to Fri 17:00 New York, with a daily hour off |
 
-Outside its sessions a market shows **closed** in the lobby and rounds do not draw it. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`), and round draws only among markets in session. It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends every market is closed.
+Outside its sessions a market shows **closed** in the lobby. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`). It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends every market is closed.
 
 Why GMEx: Amazon, Meta, Microsoft and Alphabet were the first picks for a fourth stock, but MagicBlock pushes none of them into its rollups (checked on devnet-eu, -us, -as and the mainnet rollups on 24 Nov 2026). The only other US equity feed on devnet-eu is GameStop (Pyth Lazer 1160, fresh every 50 to 200 ms, same sessions as the other stocks), and GameStop trades on Solana as the GMEx xStock, so every market is read the same way: a MagicBlock price account, no relay, no trusted key.
 
@@ -63,19 +63,18 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | | Solana (base) | Ephemeral Rollup | Off-chain |
 |---|---|---|---|
 | Sirocco test USDC (tUSDC), faucet, house vault, payouts | ✓ | | |
-| Stakes, round entries and pots | ✓ | | |
+| Stakes | ✓ | | |
 | Session authorisation (`SessionTokenV2`) and spending allowance | ✓ | | |
-| Live climbs and rounds: entry price, ticks, leverage, bust, cash out | | ✓ | |
+| Live climbs: entry price, ticks, leverage, bust, cash out | | ✓ | |
 | Prices (Pyth Lazer pushed by MagicBlock) | | ✓ | |
 | Profiles: handle, record, bests, last 8 climbs, pack | ✓ | | |
-| VRF draws: round market, leverage packs | ✓ | | |
-| Leaderboards (today, all time, last round) | read | | front |
-| Round autopilot: open, delegate, go live, finish, settle, record | ✓ | ✓ | any browser (permissionless) |
-| Practice players when a round is nearly empty | ✓ | ✓ | in the browser |
+| VRF draws: leverage packs | ✓ | | |
+| Leaderboards (today, all time) | read | | front |
+| Climb autopilot: finish and settle a climb left behind | ✓ | ✓ | any browser (permissionless) |
 
 **Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
 
-**Serverless.** Nothing has to run on our side for the game to work: every step of a climb or a round is permissionless, and the page itself pushes each one along (autopilot). When a round is nearly empty, up to three practice players join from your own browser: real keypairs with their own profile and test USDC, funded once by your session key, that play their seat on the rollup. The optional keeper (`npm run keeper`) only makes the lobby feel alive when nobody is online. The one serverless route is a devnet SOL faucet for new wallets.
+**Serverless.** Nothing has to run on our side for the game to work: every step of a climb is permissionless, and the page itself pushes each one along (autopilot). The optional keeper (`npm run keeper`) only sweeps climbs left on the rollup by closed tabs. The one serverless route is a devnet SOL faucet for new wallets.
 
 ## Leverage packs
 
@@ -117,27 +116,26 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 |---|---|
 | `npm run chain:build` | `anchor build` in `chain/` |
 | `npm run chain:test` | Rust unit tests of the game rules |
-| `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll, round slots |
+| `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll |
 | `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GMEx) |
-| `npm run battery -- 24 2 2` | on-chain battery: players, rounds, solo waves ([BATTERY.md](BATTERY.md)) |
-| `npm run test:ui` | the real front in headless Chrome (`FLOW=round`, `pack`, `menu`; `FRESH=1` from an empty burner) |
+| `npm run battery -- 24 2` | on-chain battery: players, solo waves, refusals, packs ([BATTERY.md](BATTERY.md)) |
+| `npm run test:ui` | the real front in headless Chrome (`FLOW=pack`, `menu`; `MARKET=GMEx` picks the market; `FRESH=1` from an empty burner) |
 | `npm run ci` | every CI step, locally |
 | `npm run test:hours` | the on-chain market hours in LiteSVM (after `npm run chain:build`) |
-| `npm run keeper` | optional keeper: rounds, house players, sweeper |
+| `npm run keeper` | optional keeper: sweeps climbs left behind |
 
 ## Tests and results
 
 | Suite | Command | Result |
 |---|---|---|
-| Game rules and sessions (Rust unit) | `npm run chain:test` | 16 / 16, including 3,000 instants matched against the front's schedule reader |
-| Market hours on the built program (LiteSVM) | `npm run test:hours` | 10 / 10 |
-| On-chain battery | `npm run battery -- 24 2 2` | before the GMEx upgrade: **404 / 404**: 48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF with every payout checked, refusals, VRF packs; after it (`-- 8 1 1`): **132 / 132**, including a VRF round drawn on GMEx ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
+| Game rules and sessions (Rust unit) | `npm run chain:test` | 13 / 13, including 3,000 instants matched against the front's schedule reader |
+| Market hours and retired round slots on the built program (LiteSVM) | `npm run test:hours` | 14 / 14 |
+| On-chain battery | `npm run battery -- 24 2` | solo only (`-- 8 1`): **118 / 118**: 8 simultaneous climbs on all five markets, refusals, VRF packs; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
 | Browser, a GMEx climb | `MARKET=GMEx npm run test:ui` | GMEx card open in the lobby, climb at the GME price, cash out, 4 proof links, 0 console errors |
-| Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
 | Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
-| UX tour (screenshots) | `node ops/test/ux-tour.mjs` | landing, lobby, wallet chooser and menu, round lobby, closed markets (clock on a Saturday), mobile; 0 page errors |
+| UX tour (screenshots) | `node ops/test/ux-tour.mjs` | landing, lobby, wallet chooser and menu, closed markets (clock on a Saturday), mobile; 0 page errors |
 | Simulation flows (`?mock`) | `npm run test:solo` etc. | the original Puppeteer flows of the front |
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
@@ -154,7 +152,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 | cash out + commit/undelegate (rollup) | 0.30 s |
 | back on Solana after the cash out | 0.9 s |
 | settle (Solana) | 1.03 s |
-| round market VRF callback / pack VRF callback | 0.6 to 0.7 s / 1.1 s |
+| pack VRF callback | 1.1 s |
 
 ## Known gaps
 
@@ -165,7 +163,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 ```
 chain/programs/siroclimb/src/
   lib.rs     instructions (Solana and rollup), account contexts, price reading
-  game.rs    climb, round, profile and pack rules, unit tests
+  game.rs    climb, profile and pack rules, unit tests
   token.rs   minimal SPL token helpers (no anchor-spl: half the binary, half the rent)
 js/chain/    isomorphic client (browser + node): config, PDAs, IDL builders, decoders,
              sending, session keys, wallets, handles, Climber
