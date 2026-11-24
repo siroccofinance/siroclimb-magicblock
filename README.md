@@ -75,6 +75,8 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | Round autopilot: open, delegate, go live, finish, settle, record | ✓ | ✓ | any browser (permissionless) |
 | Practice players when a round is nearly empty | ✓ | ✓ | in the browser |
 
+**Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
+
 **Serverless.** Nothing has to run on our side for the game to work: every step of a climb or a round is permissionless, and the page itself pushes each one along (autopilot). When a round is nearly empty, up to three practice players join from your own browser: real keypairs with their own profile and test USDC, funded once by your session key, that play their seat on the rollup. The optional keeper (`npm run keeper`) only makes the lobby feel alive when nobody is online. The two serverless routes are a devnet SOL faucet for new wallets and the GBP/USD relay.
 
 ## Leverage packs
@@ -130,12 +132,12 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 |---|---|---|
 | Game rules and sessions (Rust unit) | `npm run chain:test` | 16 / 16, including 3,000 instants matched against the front's schedule reader |
 | Market hours on the built program (LiteSVM) | `npm run test:hours` | 10 / 10 |
-| On-chain battery, solo | `npm run battery -- 24 2 2` | 48 simultaneous climbs by 24 session-keyed players, refusals, VRF packs: 338 / 342 (the 4 failures: one stuck round slot, fixed) |
-| On-chain battery, rounds | `npm run battery -- 24 2 0` | two full 24-seat rounds drawn by VRF, every payout checked: 66 / 67 (one test bug, fixed) |
+| On-chain battery | `npm run battery -- 24 2 2` | latest run on the upgraded program: **400 / 400**: 48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF with every payout checked, refusals, VRF packs ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
 | Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
 | Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
+| UX tour (screenshots) | `node ops/test/ux-tour.mjs` | landing, lobby, wallet chooser and menu, round lobby, closed markets (clock on a Saturday), mobile; 0 page errors |
 | Simulation flows (`?mock`) | `npm run test:solo` etc. | the original Puppeteer flows of the front |
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
@@ -147,17 +149,17 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 | Step | Median |
 |---|---|
 | stake + delegate (Solana) | 1.0 s |
-| delegation visible on the rollup | 20 ms |
-| begin at the oracle price + schedule the crank (rollup) | 0.37 s |
-| cash out + commit/undelegate (rollup) | 0.34 s |
+| delegation visible on the rollup | 17 ms |
+| begin at the oracle price + schedule the crank (rollup) | 0.31 s |
+| cash out + commit/undelegate (rollup) | 0.30 s |
 | back on Solana after the cash out | 0.9 s |
-| settle (Solana) | 1.05 s |
+| settle (Solana) | 1.03 s |
 | round market VRF callback / pack VRF callback | 0.6 to 0.7 s / 1.1 s |
 
 ## Known gaps
 
 - **GBP/USD trust.** The relay is one named key fed from Kraken. MagicBlock has no FX feed on its rollups and our Pyth key is not entitled to FX; with an FX entitlement the relay would post signed Pyth Lazer updates instead.
-- **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. Keeping a player's run account delegated between climbs would remove it; not done for the hackathon.
+- **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. The front funds the session key in proportion to the wallet (up to about 60 climbs) and shows the fuel left in the wallet menu; keeping a player's run delegated between climbs would remove the cost and is left for after the hackathon.
 - **Not hosted.** The repo is Vercel-ready (static site + two functions) but not deployed.
 
 ## Repository
