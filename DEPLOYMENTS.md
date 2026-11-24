@@ -1,5 +1,9 @@
 # Deployments (Solana devnet + MagicBlock devnet-eu)
 
+## Keys
+
+Everything below was created and is paid for by Siroclimb's own deployer, `DnSHPS8XgyNhTo8Yj5gVnA2ouXTe6t4c83W3AbcnLs7w` (`~/.config/siroclimb/solana/deployer.json`): it is the program's upgrade authority, the config admin, the xStock mirrors' mint authority, and the only key that funds the others (relay key, site faucet, keeper, house players, battery players, all under `~/.config/siroclimb/solana/`). The scripts refuse the Solana CLI default wallet.
+
 ## Program and accounts
 
 | | Address |
