@@ -3,13 +3,12 @@
 // rise into an escalator of blocks; the coin stands on the landing edge and rolls in place,
 // wobbling. Measured from the reference: one tile every 15 frames (0.5 s), coin wobble 75 frames.
 import * as THREE from 'three';
-import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { SIROCCO_LOGO_PATH } from './logo-path.js';
+import { coinFaceMaps } from './coin-face.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { inverseACES, SIROCCO_COLORS, THEMES as HERO_THEMES } from './sirocco-coin-scene.js';
 
@@ -136,27 +135,28 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
   // coin
   const coin = new THREE.Group();
   const coinMat = new THREE.MeshPhysicalMaterial({ color: SIROCCO_COLORS.coin, metalness: 1, roughness: 0.3, clearcoat: 0.35, clearcoatRoughness: 0.15, envMapIntensity: G ? TH.coinEnv : 1.0 });
-  const logoMat = new THREE.MeshPhysicalMaterial({ color: SIROCCO_COLORS.coinLogo, metalness: 1, roughness: 0.12, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: G ? TH.coinEnv + 0.1 : 1.1 });
+  // the face: a flat disc carrying the minted Sirocco mark (maps drawn from the vector logo, see coin-face.js)
+  const small = typeof innerWidth !== 'undefined' && Math.min(innerWidth, innerHeight) < 600;
+  const faceMat = new THREE.MeshPhysicalMaterial({ ...coinFaceMaps(small ? 1024 : 2048, renderer.capabilities.getMaxAnisotropy()), color: '#ffffff', metalness: 1, roughness: 1,
+    clearcoat: 0.25, clearcoatRoughness: 0.2, envMapIntensity: G ? TH.coinEnv + 0.15 : 1.1 });
+  const faces = [];
   {
     const k = RC / 0.30, t = TC / 2, hf = t - 0.008, pts = [];
     const add = (r, h) => pts.push(new THREE.Vector2(r * k, h));
-    add(0, -hf); add(0.238, -hf); add(0.246, -t + 0.001); add(0.252, -t);
+    add(0.238, -hf); add(0.246, -t + 0.001); add(0.252, -t);
     add(0.285, -t); add(0.296, -t + 0.004); add(0.30, -t + 0.012);
     add(0.30, t - 0.012); add(0.296, t - 0.004); add(0.285, t);
-    add(0.252, t); add(0.246, t - 0.001); add(0.238, hf); add(0, hf);
+    add(0.252, t); add(0.246, t - 0.001); add(0.238, hf);
     const g = new THREE.LatheGeometry(pts, 160); g.rotateX(Math.PI / 2);
     const body = new THREE.Mesh(g, coinMat); body.castShadow = true; body.receiveShadow = true; coin.add(body);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 14 250 309"><path d="${SIROCCO_LOGO_PATH}"/></svg>`;
-    const shapes = new SVGLoader().parse(svg).paths.flatMap(p => SVGLoader.createShapes(p));
-    const s = (0.33 * k) / 309, depth = 13, bt = 3;
-    const lg = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: true, bevelThickness: bt, bevelSize: 2.2, bevelSegments: 4, curveSegments: 48 });
-    lg.translate(-139, -168.5, 0); lg.scale(s, -s, -s); lg.translate(0, 0, (depth + bt) * s); lg.computeVertexNormals();
-    const faceZ = TC / 2 - 0.008;
-    const front = new THREE.Mesh(lg, logoMat); front.position.z = faceZ; front.castShadow = true;
-    const back = new THREE.Mesh(lg, logoMat); back.rotation.y = Math.PI; back.position.z = -faceZ;
-    coin.add(front, back);
+    // the faces close the rim's ring
+    const fg = new THREE.CircleGeometry(0.238 * k, 160);
+    const front = new THREE.Mesh(fg, faceMat); front.position.z = hf;
+    const back = new THREE.Mesh(fg, faceMat); back.rotation.y = Math.PI; back.position.z = -hf;
+    front.castShadow = back.castShadow = true;
+    coin.add(front, back); faces.push(front, back);
   }
-  coinMat.fog = false; logoMat.fog = false; // the coin never dissolves into the terracotta
+  coinMat.fog = false; faceMat.fog = false; // the coin never dissolves into the terracotta
   const coinPivot = new THREE.Group(); // stands on the belt, yaw wobble applied here
   coinPivot.add(coin);
   scene.add(coinPivot);
@@ -260,7 +260,6 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
     if (halo) { v1.copy(coinPivot.position).sub(camera.position).normalize().multiplyScalar(0.9); halo.position.copy(coinPivot.position).add(v1); halo.position.y += 0.12; }
   }
   function setTime(t) { pose(loopState(t * SPEED, t)); }
-
   // ── launch: the belt brakes, the coin settles on the centre of the box it stands on, the box dips,
   //    then springs up and tosses the coin (flipping) into the air. Times in seconds from the click.
   const L = { TS: 0.42, TA: 0.16, TL: 0.30, LIFT: 0.95, G: 9, V0: 6.2, FLIP: 2.4, FOLLOW_T: 0.75, DOLLY: 0.55 };
