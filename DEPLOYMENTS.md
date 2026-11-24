@@ -2,7 +2,7 @@
 
 ## Keys
 
-Everything below was created and is paid for by Siroclimb's own deployer, `DnSHPS8XgyNhTo8Yj5gVnA2ouXTe6t4c83W3AbcnLs7w` (`~/.config/siroclimb/solana/deployer.json`): it is the program's upgrade authority, the config admin, the xStock mirrors' mint authority, and the only key that funds the others (relay key, site faucet, keeper, house players, battery players, all under `~/.config/siroclimb/solana/`). The scripts refuse the Solana CLI default wallet.
+Everything below was created and is paid for by Siroclimb's own deployer, `DnSHPS8XgyNhTo8Yj5gVnA2ouXTe6t4c83W3AbcnLs7w` (`~/.config/siroclimb/solana/deployer.json`): it is the program's upgrade authority, the config admin, the xStock mirrors' mint authority, and the only key that funds the others (site faucet, keeper, house players, battery players, all under `~/.config/siroclimb/solana/`). The scripts refuse the Solana CLI default wallet.
 
 ## Program and accounts
 
@@ -16,8 +16,6 @@ Everything below was created and is paid for by Siroclimb's own deployer, `DnSHP
 | Round slot 1 | [`FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy`](https://explorer.solana.com/address/FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy?cluster=devnet) |
 | Round slot 2 | [`3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv`](https://explorer.solana.com/address/3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv?cluster=devnet) |
 | Round slot 3 | [`BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4`](https://explorer.solana.com/address/BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4?cluster=devnet) |
-| GBP/USD relay `["relay", 4]` (delegated, lives on the rollup) | [`2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr`](https://explorer.solana.com/address/2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app) |
-| Relay key | `DzeEB8bDswhwwWiwGDkvQywnX3V97B7FPJUQfnwRUAvK` |
 | VRF request identity `["identity"]` | `CeEPZEQLFiVQJ6RyKjTr6j4JAiJGkqUy3xFBNwVHh94J` |
 | Site faucet key (devnet SOL for new wallets) | `A6koh5fTipjQLyVzJWB4fFwcivBF1G3w4e9KvmxfwTHH` |
 
@@ -33,7 +31,7 @@ While a climb or a round is live its account reads as owned by the delegation pr
 | NVDAx | `3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC` | Pyth Lazer 1314 `Equity.US.NVDA/USD`, expo -5 | [`4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ`](https://explorer.solana.com/address/4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ?cluster=devnet) NVIDIA xStock, 8 dec. | `Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh` |
 | AAPLx | `B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1` | Pyth Lazer 922 `Equity.US.AAPL/USD`, expo -5 | [`yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb`](https://explorer.solana.com/address/yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb?cluster=devnet) Apple xStock, 8 dec. | `XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp` |
 | Gold | `9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn` | Pyth Lazer 346 `Metal.XAU/USD`, expo -3 | | |
-| GBP/USD | `2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr` | program relay, Kraken GBP/USD mid, expo -5 | | |
+| GMEx | `BjxWySYsKPbDfsNxLRPocTEB55RRPbAuWqMqUJHVgqpE` | Pyth Lazer 1160 `Equity.US.GME/USD`, expo -5 | [`FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy`](https://explorer.solana.com/address/FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy?cluster=devnet) GameStop xStock, 8 dec. | `Xsf9mBktVB9BSU5kf4nHxPq5hCBJ2j2ui3ecFGxPRGc` |
 
 Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlock's oracle program `PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd`. No devnet mint of the Backed xStocks exists (the mainnet addresses hold no mint on devnet), so the mirrors above copy their name, symbol and decimals (Token-2022 with the metadata extension, mint authority = Siroclimb's deployer; `npm run mirrors`).
 
