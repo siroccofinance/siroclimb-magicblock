@@ -11,3 +11,4 @@ chain/target/
 chain/.anchor/
 test-ledger/
 .env*
+.vercel
