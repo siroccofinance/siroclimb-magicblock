@@ -4,18 +4,18 @@
 
 | | Address |
 |---|---|
-| Program `siroclimb` | [`29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov`](https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet) |
-| Config PDA `["config"]` | [`GZR4ec1iw3pgAuyaMWZZZqe4QWABw1QosMk9LZeoX2W9`](https://explorer.solana.com/address/GZR4ec1iw3pgAuyaMWZZZqe4QWABw1QosMk9LZeoX2W9?cluster=devnet) |
-| Sirocco test USDC (tUSDC, 6 decimals, mint authority = config) | [`8ZErCMxAWsxTn4wKLLhWduwquZbswFJAuKz7Mzybv6WV`](https://explorer.solana.com/address/8ZErCMxAWsxTn4wKLLhWduwquZbswFJAuKz7Mzybv6WV?cluster=devnet) |
-| House vault (bankroll + round pots, owned by config) | [`2btrt3Tos9tnhr7958nXJe9G9PjVdCGgXSbv9ur67K8v`](https://explorer.solana.com/address/2btrt3Tos9tnhr7958nXJe9G9PjVdCGgXSbv9ur67K8v?cluster=devnet) |
-| Round slot 0 `["round", 0]` | [`8pYZciJuWJxd5AtWqHqmjVrP1yuYVeYPhWGh5jHoVUSo`](https://explorer.solana.com/address/8pYZciJuWJxd5AtWqHqmjVrP1yuYVeYPhWGh5jHoVUSo?cluster=devnet) |
-| Round slot 1 | [`EqtwEHyU1WpckaKDPMmicuYapd7eiXAFy2DBPngJPi6f`](https://explorer.solana.com/address/EqtwEHyU1WpckaKDPMmicuYapd7eiXAFy2DBPngJPi6f?cluster=devnet) |
-| Round slot 2 | [`99v93U1xAo1zus1FuBxtyMjY9XawXtYu6hpZRuVieabv`](https://explorer.solana.com/address/99v93U1xAo1zus1FuBxtyMjY9XawXtYu6hpZRuVieabv?cluster=devnet) |
-| Round slot 3 | [`7hhjU91MQxNZh9zJtjv76JiMsJs1WEq2K4YEknkW1sCu`](https://explorer.solana.com/address/7hhjU91MQxNZh9zJtjv76JiMsJs1WEq2K4YEknkW1sCu?cluster=devnet) |
-| GBP/USD relay `["relay", 4]` (delegated, lives on the rollup) | [`83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21`](https://explorer.solana.com/address/83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app) |
-| Relay key | `AVuSgiYwcwQkESNGosk21sxvDmQfRmAWJybB7Ucuwjo2` |
-| VRF request identity `["identity"]` | `Aowxjfiw1sit2tKCnc91rK5GZoDNQS7xukiqRbAF7Uu2` |
-| Site faucet key (devnet SOL for new wallets) | `4tRkjGRNDTutUNJBMh56hBkizxLSZ11PEcmNU5UwRYvx` |
+| Program `siroclimb` | [`BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ`](https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet) |
+| Config PDA `["config"]` | [`2BwybAfVsxnhGKshVA3SuebZ4tASCwWoKBn9N2eum9Y9`](https://explorer.solana.com/address/2BwybAfVsxnhGKshVA3SuebZ4tASCwWoKBn9N2eum9Y9?cluster=devnet) |
+| Sirocco test USDC (tUSDC, 6 decimals, mint authority = config) | [`4nkq8Ef2EfWkZ7LnF1MzH6YAV8cDGiQdePtKKr2UBAwo`](https://explorer.solana.com/address/4nkq8Ef2EfWkZ7LnF1MzH6YAV8cDGiQdePtKKr2UBAwo?cluster=devnet) |
+| House vault (bankroll + round pots, owned by config) | [`Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4`](https://explorer.solana.com/address/Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4?cluster=devnet) |
+| Round slot 0 `["round", 0]` | [`J93gViLDAvQLDnbvq2TZHKkteMZvjgajUQr2DrJkZDyw`](https://explorer.solana.com/address/J93gViLDAvQLDnbvq2TZHKkteMZvjgajUQr2DrJkZDyw?cluster=devnet) |
+| Round slot 1 | [`FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy`](https://explorer.solana.com/address/FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy?cluster=devnet) |
+| Round slot 2 | [`3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv`](https://explorer.solana.com/address/3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv?cluster=devnet) |
+| Round slot 3 | [`BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4`](https://explorer.solana.com/address/BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4?cluster=devnet) |
+| GBP/USD relay `["relay", 4]` (delegated, lives on the rollup) | [`2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr`](https://explorer.solana.com/address/2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app) |
+| Relay key | `DzeEB8bDswhwwWiwGDkvQywnX3V97B7FPJUQfnwRUAvK` |
+| VRF request identity `["identity"]` | `CeEPZEQLFiVQJ6RyKjTr6j4JAiJGkqUy3xFBNwVHh94J` |
+| Site faucet key (devnet SOL for new wallets) | `A6koh5fTipjQLyVzJWB4fFwcivBF1G3w4e9KvmxfwTHH` |
 
 Per player: profile `["profile", wallet]`, run `["run", wallet]` (one, reused climb after climb), faucet claim `["faucet", signer]`, session token `["session_token_v2", program, session key, wallet]` of the session-keys program.
 
@@ -29,7 +29,7 @@ While a climb or a round is live its account reads as owned by the delegation pr
 | NVDAx | `3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC` | Pyth Lazer 1314 `Equity.US.NVDA/USD`, expo -5 | [`E4XAzgHmwAcZ1ajUfUdkDUPCen6CutyXZk218F5623WG`](https://explorer.solana.com/address/E4XAzgHmwAcZ1ajUfUdkDUPCen6CutyXZk218F5623WG?cluster=devnet) NVIDIA xStock, 8 dec. | `Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh` |
 | AAPLx | `B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1` | Pyth Lazer 922 `Equity.US.AAPL/USD`, expo -5 | [`DsPehKph9sP6FXAQTQSuZj6Us8XcKk9YKXt8LWfkAoW`](https://explorer.solana.com/address/DsPehKph9sP6FXAQTQSuZj6Us8XcKk9YKXt8LWfkAoW?cluster=devnet) Apple xStock, 8 dec. | `XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp` |
 | Gold | `9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn` | Pyth Lazer 346 `Metal.XAU/USD`, expo -3 | | |
-| GBP/USD | `83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21` | program relay, Kraken GBP/USD mid, expo -5 | | |
+| GBP/USD | `2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr` | program relay, Kraken GBP/USD mid, expo -5 | | |
 
 Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlock's oracle program `PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd`. No devnet mint of the Backed xStocks exists (the mainnet addresses hold no mint on devnet), so the mirrors above copy their name, symbol and decimals (Token-2022 with the metadata extension, mint authority = the admin key).
 
@@ -51,7 +51,7 @@ The 24 battery players (realistic handles: saffron301, dune.sol, ghibli_hunter, 
 
 ## Integration proof (explorer)
 
-- Program: https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet
+- Program: https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet
 - A TSLAx climb, step by step (probe on the current deployment, 24 Nov 2026):
   - stake + delegate on Solana: https://explorer.solana.com/tx/2N2FQJv8vKxPtLb69KSEyF17K6MUJSp8YAZKB87xSJ6s8x2aW46QynTc2S4ur5CbQSAMy26Mtf4mZfVHfTnjRtSq?cluster=devnet
   - begin on the rollup at the Pyth Lazer price, crank scheduled: https://explorer.solana.com/tx/2KttPS5JkkoDEAcF8hBA917jYSj2EH9JfDyCPaydpuAG7CGz342rcUjeZ9C8rz5ExL8fV36dJaxVD7Wv1uFYtQEz?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
