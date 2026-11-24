@@ -107,13 +107,37 @@ function advance(run, ts) {
 function update(run, ts) {
   const t = Math.max(0, (Math.min(ts, run.endedAt || ts) - run.startedAt) / 1000), step = stepOf(run, t);
   return { t, price: run.last, step, leverage: run.ladder[step], value: run.value, pnl: run.value - run.stake, pnlPct: (run.value / run.stake - 1) * 100,
-    risk: Math.min(1, Math.max(0, 1 - run.value / run.stake)), status: run.status };
+    risk: Math.min(1, Math.max(0, 1 - run.value / run.stake)), status: run.status,
+    borrowed: run.stake * (run.ladder[step] - 1), borrowCost: costOf(run, t) };
 }
+// the Sirocco Reserve in the simulation: same fee (0.1 % of the peak borrow) and APR (36.5 %)
+const costOf = (run, t) => run.stake * (run.maxLev - 1) * 0.001 + run.stake * (run.maxLev - 1) * 0.365 * Math.min(t, run.duration) / 31_536_000;
 function settle(run) {
-  const r = { status: run.status, value: run.value, pnl: run.value - run.stake, pnlPct: (run.value / run.stake - 1) * 100, maxLeverage: run.maxLev,
-    duration: ((run.endedAt || Date.now()) - run.startedAt) / 1000, entryPrice: run.entryPrice, exitPrice: run.last };
-  if (run.mode === 'solo' && !run.bot) { setBal(bal + run.value); record(run, r); }
+  const duration = ((run.endedAt || Date.now()) - run.startedAt) / 1000, cost = Math.min(run.value, costOf(run, duration)), value = run.value - cost;
+  const r = { status: run.status, value, pnl: value - run.stake, pnlPct: (run.value / run.stake - 1) * 100, maxLeverage: run.maxLev,
+    duration, entryPrice: run.entryPrice, exitPrice: run.last, borrowCost: cost, peakBorrow: run.stake * (run.maxLev - 1) };
+  if (run.mode === 'solo' && !run.bot) { setBal(bal + value); mockReserve.tvl += run.stake - value; record(run, r); }
   return r;
+}
+
+// ── Sirocco Reserve (simulated lending pool)
+const mockReserve = { tvl: 5_000_000, shares: 5_000_000, mine: store.get('reserveShares', 0) };
+export async function reserveInfo() {
+  const sp = mockReserve.tvl / mockReserve.shares;
+  return { tvl: mockReserve.tvl, sharePrice: sp, free: mockReserve.tvl, reserved: 0, lines: 0, utilization: 0, apy: 0, fees: 0, runs: 0, borrowedVolume: 0, aprBorrow: 36.5, feeBps: 10,
+    me: mockReserve.mine ? { shares: mockReserve.mine, value: mockReserve.mine * sp, deposited: 0, withdrawn: 0 } : null };
+}
+export async function deposit(amount) {
+  if (!(amount >= 1 && amount <= bal)) throw new Error('Not enough test tokens');
+  const n = amount * mockReserve.shares / mockReserve.tvl;
+  setBal(bal - amount); mockReserve.tvl += amount; mockReserve.shares += n; mockReserve.mine += n; store.set('reserveShares', mockReserve.mine);
+  return 'mock';
+}
+export async function withdraw(amount, all = false) {
+  const sp = mockReserve.tvl / mockReserve.shares, n = all ? mockReserve.mine : Math.min(mockReserve.mine, amount / sp);
+  if (!(n > 0)) throw new Error('Nothing lent to the reserve yet');
+  setBal(bal + n * sp); mockReserve.tvl -= n * sp; mockReserve.shares -= n; mockReserve.mine -= n; store.set('reserveShares', mockReserve.mine);
+  return 'mock';
 }
 function runTick(ts) {
   for (const run of runs.values()) {
