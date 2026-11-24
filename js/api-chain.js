@@ -181,6 +181,12 @@ async function ensureFuel() {
   await climber.topUpSession(await fuelAmount());
 }
 
+/// Climbs the session key can still pay for (about 0.003 SOL each).
+export async function climbsLeft() {
+  if (!climber || !climber.session) return 0;
+  return Math.floor((await base.getBalance(climber.session.keypair.publicKey)) / 3_100_000);
+}
+
 export async function connect(id) {
   try {
     const choice = id || (injectedWallets()[0] ? injectedWallets()[0].id : 'burner');
