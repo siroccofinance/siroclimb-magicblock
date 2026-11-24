@@ -30,9 +30,11 @@ about N climbs.
 ## 3. The climb on the rollup (0:50 to 1:40)
 
 The belt brakes, the coin starts climbing. Point at the leverage gauge (1x, 1.5x, 2x…),
-the price and the sparkline.
+the price and the sparkline (already full: it is read back from the rollup's own
+price updates).
 
-> "This climb is not in my browser. My run account was delegated to a MagicBlock
+> "Markets keep their real trading hours, on chain: a closed market's frozen
+> price cannot start a climb. This climb is not in my browser. My run account was delegated to a MagicBlock
 > Ephemeral Rollup: the entry is MagicBlock's real-time Pyth price for Tesla, and a
 > crank ticks the climb on chain every half second: leverage steps, value, the bust.
 > All of that is free and instant."
