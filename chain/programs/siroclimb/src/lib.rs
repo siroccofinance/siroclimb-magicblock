@@ -187,6 +187,7 @@ pub mod siroclimb {
         authorize(&signer, &player, &ctx.accounts.session_token, now)?;
         require!((asset as usize) < ASSETS, ClimbError::BadAsset);
         require!(side <= SIDE_SHORT, ClimbError::BadSide);
+        require!(hours::in_session(asset, now), ClimbError::MarketClosed);
         let run = &mut ctx.accounts.run;
         require!(run.status == RUN_FREE || run.status == RUN_SETTLED, ClimbError::RunInProgress);
 
