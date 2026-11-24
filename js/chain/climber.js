@@ -1,13 +1,13 @@
 // One player's side of the game, on both layers: onboarding (the one wallet
-// approval), solo climbs, rounds, packs, and the permissionless follow-ups
+// approval), solo climbs, packs, and the permissionless follow-ups
 // (finish, settle, record) any client can push forward. Used by the front
 // (js/api.js), the in-browser practice bots, the keeper and the batteries.
-import { ComputeBudgetProgram, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, ROUND, RUN, USDC_MINT } from './config.js';
-import { decodePrice, decodeProfile, decodeRound, decodeRun } from './codec.js';
+import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, RUN, USDC_MINT } from './config.js';
+import { decodePrice, decodeProfile, decodeRun } from './codec.js';
 import { approveIx, createAtaIdempotent, createSessionIx, ix } from './ix.js';
-import { ataOf, profilePda, roundPda, runPda, sessionTokenPda } from './pdas.js';
+import { ataOf, profilePda, runPda, sessionTokenPda } from './pdas.js';
 import { send, sleep } from './tx.js';
 
 export const SESSION_HOURS = 12;
@@ -98,53 +98,6 @@ export class Climber {
   async settleRun(player = this.me) {
     await this.waitOnBase(runPda(player));
     return send(this.base, [ix.settleRun(this.actor.publicKey, player)], [this.actor], { label: 'settle run' });
-  }
-
-  // ------------------------------------------------------------- rounds
-  async round(id) {
-    const key = roundPda(id);
-    const b = await this.base.getAccountInfo(key);
-    if (!b) return null;
-    if (b.owner.equals(DELEGATION_PROGRAM_ID)) {
-      const e = await this.er.getAccountInfo(key);
-      return e ? { ...decodeRound(e.data), layer: 'er' } : { ...decodeRound(b.data), layer: 'moving' };
-    }
-    return { ...decodeRound(b.data), layer: 'base' };
-  }
-  async openRound(id, openMarkets) { return send(this.base, [ix.openRound(this.actor.publicKey, id, openMarkets)], [this.actor], { label: 'open round' }); }
-  async joinRound(id, side) {
-    const sideN = side === 'short' || side === 1 ? 1 : 0;
-    return send(this.base, [ix.joinRound(this.actor.publicKey, this.me, id, sideN, this.token)], [this.actor], { label: 'join round' });
-  }
-  async delegateRound(id) { return send(this.base, [ix.delegateRound(this.actor.publicKey, id, ER_VALIDATOR)], [this.actor], { label: 'delegate round' }); }
-  async goLive(id, asset, crank = true) {
-    await this.waitOnEr(roundPda(id), (d) => decodeRound(d).status === ROUND.OPEN);
-    return send(this.er, [ix.goLive(this.actor.publicKey, id, asset, crank)], [this.actor], { label: 'go live' });
-  }
-  async tickRound(id, asset) { return send(this.er, [ix.tickRound(id, asset)], [this.actor], { label: 'tick round' }); }
-  async cashOutRound(id, asset) { return send(this.er, [ix.cashOutRound(this.actor.publicKey, id, asset)], [this.actor], { label: 'cash out round' }); }
-  async finishRound(id, asset) { return send(this.er, [ix.finishRound(this.actor.publicKey, id, asset)], [this.actor], { label: 'finish round' }); }
-  async settleRound(id) {
-    await this.waitOnBase(roundPda(id));
-    const r = await this.round(id);
-    const winners = r.winners.filter((w, k) => w !== 255 && r.prizes[k] > 0).map((w) => r.entries[w].player);
-    return send(this.base, [ix.settleRound(this.actor.publicKey, id, winners)], [this.actor], { label: 'settle round' });
-  }
-  /// Write a settled round into its players' profiles, a few per transaction.
-  /// Each profile costs about 25k compute units (PDA check, deserialize,
-  /// record, serialize): 10 per transaction ran out of the default 200k, so
-  /// it is 6 per transaction with a raised limit.
-  async recordRound(id, per = 6) {
-    const r = await this.round(id);
-    const todo = r.entries.filter((e) => !(r.recorded & (1 << e.index))).map((e) => e.player);
-    const sigs = [];
-    for (let i = 0; i < todo.length; i += per) {
-      sigs.push(await send(this.base, [
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
-        ix.recordRound(this.actor.publicKey, id, todo.slice(i, i + per)),
-      ], [this.actor], { label: 'record round' }));
-    }
-    return sigs;
   }
 
   // -------------------------------------------------------------- packs
