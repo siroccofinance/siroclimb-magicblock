@@ -26,6 +26,7 @@ import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor, uniqueHandles } from './chain/handles.js';
 import { inSession, nextOpen } from './chain/hours.js';
+import { recentPrices } from './chain/history.js';
 import { dropSession, injectedWallets, loadSession, openWallet, saveSession } from './chain/wallet.js';
 
 const base = new Connection(BASE_RPC, 'confirmed');
@@ -63,6 +64,19 @@ async function pollPrices() {
 }
 setInterval(pollPrices, 250);
 pollPrices();
+
+// The chart starts full: the last 90 s of every market, read back from its
+// price account's update transactions on the rollup (no key, same source).
+async function seedHistory() {
+  await Promise.all(MARKETS.map(async (m, i) => {
+    try {
+      const past = await recentPrices(er, i, { seconds: 90, points: 90 });
+      const f = feeds[i], first = f.hist.length ? f.hist[0].ts : Infinity;
+      f.hist = [...past.filter((p) => p.ts < first), ...f.hist];
+    } catch (e) { log('history', m.id, e.message); }
+  }));
+}
+seedHistory();
 
 // GBP/USD has no MagicBlock feed: ask the relay to push while this page is visible.
 const RELAY_URL = (globalThis.SIROCLIMB_ENV && globalThis.SIROCLIMB_ENV.RELAY_URL) || 'api/relay';
