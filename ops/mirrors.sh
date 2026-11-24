@@ -6,7 +6,7 @@ set -euo pipefail
 KEYS="${SIROCLIMB_KEYS:-$HOME/.config/siroclimb/solana}"
 DEPLOYER="$KEYS/deployer.json"
 RPC="${SIROCLIMB_BASE_RPC:-https://rpc.magicblock.app/devnet}"
-for t in "TSLAx|Tesla xStock" "NVDAx|NVIDIA xStock" "AAPLx|Apple xStock"; do
+for t in "TSLAx|Tesla xStock" "NVDAx|NVIDIA xStock" "AAPLx|Apple xStock" "GMEx|GameStop xStock"; do
   S=${t%|*}; N=${t#*|}; K="$KEYS/mirror-$S.json"
   [ -f "$K" ] || solana-keygen new --no-bip39-passphrase -s -o "$K" >/dev/null
   M=$(solana-keygen pubkey "$K")

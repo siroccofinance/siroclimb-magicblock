@@ -38,7 +38,7 @@ export function scheduleOpen(schedule, ms = Date.now()) {
 }
 
 /// Is a market (by its `hours` tag) inside one of its sessions? Unknown tags
-/// (the GBP/USD relay: its source trades every day) count as open.
+/// count as open.
 export function inSession(hours, ms = Date.now()) {
   const s = SCHEDULES[hours];
   return !s || s.some((x) => scheduleOpen(x, ms));
