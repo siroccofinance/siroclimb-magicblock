@@ -244,10 +244,14 @@ async function playRound(k) {
   const order = vals.map((v, i) => i).sort((a, b) => vals[b] - vals[a] || a - b);
   check(tag, 'podium = best three positions', JSON.stringify(r.winners.slice(0, Math.min(3, r.players))) === JSON.stringify(order.slice(0, 3)), `${r.winners} vs ${order.slice(0, 3)}`);
   check(tag, 'prizes 50/30/20 sum to the pot', r.prizes.reduce((a, b) => a + b, 0) === r.pot, r.prizes.map((p) => p / 1e6).join('/'));
-  await timed('finish round + commit/undelegate (rollup)', () => F(5).finishRound(id, r.asset));
+  // every step from here is permissionless: another client (a browser's autopilot,
+  // the keeper) may take it first, which is fine as long as the round moves on
+  const orDone = async (fn, done) => { try { await fn(); } catch (e) { if (!(await done())) throw e; } };
+  const now2 = async () => (await F(0).round(id)) || {};
+  await timed('finish round + commit/undelegate (rollup)', () => orDone(() => F(5).finishRound(id, r.asset), async () => (await now2()).layer !== 'er'));
   await timed('round back on Solana', () => F(5).waitOnBase(roundPda(id)));
-  await timed('settle round (Solana)', () => F(6).settleRound(id));
-  await timed('record profiles (10 per tx)', () => F(7).recordRound(id));
+  await timed('settle round (Solana)', () => orDone(() => F(6).settleRound(id), async () => (await now2()).status === ROUND.SETTLED));
+  await timed('record profiles (6 per tx)', () => orDone(() => F(7).recordRound(id), async () => { const x = await now2(); return x.recorded === 2 ** x.players - 1; }));
   r = await field[0].round(id);
   check(tag, 'settled and every profile recorded', r.status === ROUND.SETTLED && r.recorded === 2 ** r.players - 1, `recorded ${r.recorded.toString(2)}`);
   const after = await Promise.all(field.map(usdcOf));
