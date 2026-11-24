@@ -38,11 +38,19 @@ price updates).
 > crank ticks the climb on chain every half second: leverage steps, value, the bust.
 > All of that is free and instant."
 
+Point at the line under the stake bar: "Borrowed 25.00 tUSDC from the Sirocco Reserve".
+
+> "The leverage is a real loan. At 2x, half of my position is tUSDC borrowed from
+> the Sirocco Reserve, a pool anyone can lend to. I pay a small fee and interest for
+> the seconds I hold it, and I can never lose more than my stake."
+
 Cash out with **Space** around 2x to 3x.
 
 > "Cashing out is one rollup transaction signed by the session key. The same
 > transaction commits the result and hands the account back to Solana, where the
-> house vault pays me."
+> reserve pays me the position minus the borrow cost."
+
+The result shows **Borrowed up to** and **Borrow cost paid**.
 
 ## 4. Proof (1:40 to 2:00)
 
@@ -60,11 +68,18 @@ On the result screen, click the **Verify** links: stake + delegate (Solana), beg
 > step of a climb is permissionless: if I close the tab, any browser finishes and
 > settles it."
 
-## 6. Packs and close (2:40 to 3:00)
+## 6. The reserve, packs and close (2:40 to 3:10)
+
+Open the **Sirocco Reserve** (bank icon): TVL, utilization, share price, lender APY.
+Deposit 100 tUSDC.
+
+> "Lenders earn every borrow fee and take the other side of every climb. A climb
+> only starts if the reserve can cover what it might owe, and that liquidity is
+> locked on chain until the climb settles."
 
 Open **Leverage pack**: the VRF draws Bronze to Diamond; play the free climb.
 
-> "Leverage packs are free climbs on the house, drawn by MagicBlock VRF. Siroclimb:
-> real-world assets, real-time on MagicBlock, settled on Solana."
+> "Leverage packs are free climbs on the reserve's money, drawn by MagicBlock VRF.
+> Siroclimb: real-world assets, real-time on MagicBlock, real leverage, settled on Solana."
 
 Show the leaderboard (today, all time), read from on-chain profiles.
