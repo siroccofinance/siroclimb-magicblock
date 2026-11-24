@@ -101,16 +101,20 @@ begin('Monday 10:00 New York', '2026-11-23T15:00:00Z');
 ok('the climb is live', runStatus() === 2, `status ${runStatus()}`);
 
 // retired round slots: only an idle one closes, only for the admin, and its rent goes back
-function roundSlot(slot, status) {
+function roundSlot(slot, status, players = 0) {
   const d = Buffer.alloc(2640);
-  d[2632] = slot; d[2633] = status;
+  d[2632] = slot; d[2633] = status; d[2635] = players;
   svm.setAccount(roundSlotPda(slot), { lamports: 14_061_440, data: d, owner: PROGRAM_ID, executable: false });
 }
-roundSlot(0, 5); roundSlot(1, 3);
+roundSlot(0, 5); roundSlot(1, 3); roundSlot(2, 2, 3); roundSlot(3, 2, 0);
 let cr = send([ix.closeRoundSlot(player.publicKey, 0)], [player]);
 ok('a player cannot close a round slot (Unauthorized 6000)', !cr.ok && cr.code === 6000, `code ${cr.code}`);
 cr = send([ix.closeRoundSlot(admin.publicKey, 1)], [admin]);
 ok('a live round slot is not closed (SlotBusy 6018)', !cr.ok && cr.code === 6018, `code ${cr.code}`);
+cr = send([ix.closeRoundSlot(admin.publicKey, 2)], [admin]);
+ok('an open round with players is not closed (SlotBusy 6018)', !cr.ok && cr.code === 6018, `code ${cr.code}`);
+cr = send([ix.closeRoundSlot(admin.publicKey, 3)], [admin]);
+ok('an open round nobody joined closes', cr.ok, cr.logs.slice(-2).join(' '));
 const before = svm.getBalance(admin.publicKey);
 cr = send([ix.closeRoundSlot(admin.publicKey, 0)], [admin]);
 const gone = svm.getAccount(roundSlotPda(0));
