@@ -23,7 +23,7 @@ const money = v => nf.format(v);
 const sgn = v => (v < -0.0049 ? MINUS : '+');
 const signed = v => sgn(v) + nf.format(Math.abs(v));
 const pct = v => sgn(v) + Math.abs(v).toFixed(2) + '%';
-const price = p => (p >= 1000 ? nf.format(p) : p >= 1 ? p.toFixed(2) : p.toFixed(4));
+const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));   // FX needs 4 decimals
 const levTxt = x => (x % 1 ? x.toFixed(1) : String(x)) + 'x';
 const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
@@ -180,7 +180,7 @@ addEventListener('click', () => { if (!walletMenu.hidden) { walletMenu.hidden = 
 
 const balEl = $('#bal'), faucetBtn = $('#faucet');
 function renderBalance(v, bump) {
-  balEl.textContent = money(v);
+  balEl.textContent = api.account() ? money(v) : '–';     // no wallet yet: no balance to show
   faucetBtn.hidden = v >= 1000;
   if (bump) { const b = balEl.parentElement; b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); }
   renderGo();
@@ -241,10 +241,12 @@ function renderLobby() {
   $('#mode').querySelectorAll('button').forEach(b => { b.disabled = !!joined && b.dataset.v !== 'round'; });
   $('#side').querySelectorAll('button').forEach(b => { b.disabled = !!joined; });
   const sel = C.mode === 'round' ? round.assetId : C.asset;
-  for (const [id, c] of Object.entries(chip)) { c.b.setAttribute('aria-pressed', String(id === sel && !(C.mode === 'round' && round.drawing))); c.b.disabled = C.mode === 'round' ? id !== sel || round.drawing : false; }
+  for (const [id, c] of Object.entries(chip)) { const unknown = C.mode === 'round' && (round.drawing || round.unopened); c.b.setAttribute('aria-pressed', String(id === sel && !unknown)); c.b.disabled = C.mode === 'round' ? id !== sel || unknown : false; }
   renderClosed();
   api.watchRounds(C.mode === 'round');
   $('#modeHint').textContent = C.mode === 'solo' ? (STAIRS ? 'The coin rolls on the live price. Leverage grows every 6 seconds.' : 'Climb at your own pace. The coin steps up every 6 seconds.')
+    : round.marketsOpen === false ? 'Every market is closed right now. Rounds resume when one opens.'
+    : round.unopened ? 'Nobody opened this round. The next one opens soon: join it and the market is drawn for everyone.'
     : round.drawing ? "Drawing this round's market with MagicBlock's verifiable randomness…" : `60 seconds on ${byId[round.assetId].ticker} for everyone. The top 3 share the pot.`;
   $('#entryV').textContent = round.entry;
   renderGo();
@@ -274,15 +276,16 @@ function renderGo() {
   }
   const r = round, pot = `${r.players} ${r.players === 1 ? 'player' : 'players'}, pot ${money(r.pot)} tUSDC`;
   if (r.joined) { go.disabled = true; go.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}`; meta.textContent = `You are in. ${pot}`; }
+  else if (r.marketsOpen === false && !r.joined) { go.disabled = true; go.textContent = 'Markets closed'; meta.textContent = 'Stocks, gold and the pound are all outside their trading hours.'; }
   else if (r.status === 'open' && r.drawing && r.players) { go.disabled = true; go.textContent = 'Drawing the market…'; meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`; }
   else if (r.status === 'open' && !r.late && r.joinable !== false) {
     go.disabled = busy; go.textContent = busy ? 'Joining…' : api.account() && bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;
     meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`;
-  } else { go.disabled = true; go.textContent = `Next round in ${mmss((r.endsAt - now) / 1000)}`; meta.textContent = 'A round is live. A new one opens every 80 seconds.'; }
+  } else { go.disabled = true; go.textContent = `Next round in ${mmss((r.endsAt - now) / 1000)}`; meta.textContent = r.unopened ? 'A new round opens every 80 seconds.' : 'A round is live. A new one opens every 80 seconds.'; }
 }
 api.onRound(r => {
   const was = round; round = r;
-  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId || was.drawing !== r.drawing) renderLobby(); else { renderGo(); renderClosed(); } }
+  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId || was.drawing !== r.drawing || was.unopened !== r.unopened) renderLobby(); else { renderGo(); renderClosed(); } }
   if (screen === 'game' && run && run.mode === 'round') renderStandings();
 });
 

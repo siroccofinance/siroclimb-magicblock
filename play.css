@@ -495,3 +495,4 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 .wallet__who b { display: block; font-size: 15px; color: var(--ink-d); }
 .wallet__who:empty { display: none; }
 .wallet__menu { min-width: 230px; }
+.ghost--pack[hidden] { display: none; }
