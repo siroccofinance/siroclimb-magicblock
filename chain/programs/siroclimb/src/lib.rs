@@ -32,6 +32,7 @@ use session_keys::SessionTokenV2;
 
 pub mod game;
 pub mod hours;
+pub mod reserve;
 pub mod token;
 use game::*;
 use token::*;
