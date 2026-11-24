@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="play.css?v=9">
+  <link rel="stylesheet" href="play.css?v=10">
 </head>
 <body data-screen="intro">
   <div class="stage" id="stage" aria-hidden="true">
@@ -151,7 +151,8 @@
       <p class="proof" id="rProof" hidden></p>
     </div>
     <div class="go">
-      <button class="ghost" id="share" aria-label="Share your result on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.18h1.7L7.4 4.73H5.58l11.09 14.45z"/></svg>Share on X</button>
+      <a class="ghost ghost--dl" id="dl" href="#" download="siroclimb.png" aria-label="Download the result image" title="Download image" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></svg></a>
+      <button class="ghost" id="share" aria-label="Share your result on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.75 3h3.07l-6.7 7.66L22 21h-6.17l-4.83-6.32L5.47 21H2.4l7.17-8.2L2 3h6.33l4.37 5.77L17.75 3zm-1.08 16.18h1.7L7.4 4.73H5.58l11.09 14.45z"/></svg>Share<span class="wide"> on X</span></button>
       <button class="cta" id="again">Play again</button>
     </div>
   </section>
@@ -239,6 +240,6 @@
   </script>
 
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "@solana/web3.js": "./js/vendor/solana.mjs", "buffer": "./js/vendor/buffer.mjs" } }</script>
-  <script type="module" src="js/game.js?v=12"></script>
+  <script type="module" src="js/game.js?v=13"></script>
 </body>
 </html>
