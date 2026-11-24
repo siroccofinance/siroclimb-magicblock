@@ -9,7 +9,7 @@ import {
 } from './config.js';
 import { encodeIx, ixAccounts } from './codec.js';
 import {
-  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, profilePda, roundPda, roundSlotPda, runPda,
+  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, profilePda, roundSlotPda, runPda,
   vrfIdentityPda,
 } from './pdas.js';
 import * as PDAS from './pdas.js';
@@ -48,7 +48,8 @@ export const ix = {
   // ----------------------------------------------------------- Solana (base)
   initialize: (admin, usdcMint, vault) => build('initialize', { admin, usdc_mint: usdcMint, vault }),
   fundHouse: (admin, amount, usdcMint = mint(), vault = VAULT) => build('fund_house', { admin, usdc_mint: usdcMint, vault }, { amount }),
-  initRoundSlot: (admin, slot) => build('init_round_slot', { admin, round: roundSlotPda(slot) }, { slot }),
+  /// Close a retired round slot, its rent back to the admin.
+  closeRoundSlot: (admin, slot) => build('close_round_slot', { admin, round: roundSlotPda(slot) }, { slot }),
   /// `owner`: whose token account receives the top up (a session key claims for its wallet).
   faucet: (user, owner = user) => build('faucet', { user, claim: faucetPda(user), usdc_mint: mint(), user_usdc: ataOf(owner, mint()) }),
   initProfile: (user, name) => build('init_profile', { user, profile: profilePda(user) }, { name }),
@@ -68,25 +69,6 @@ export const ix = {
   settleRun: (caller, player) =>
     build('settle_run', { caller, run: runPda(player), profile: profilePda(player), player_usdc: ataOf(player, mint()), vault: VAULT }),
 
-  openRound: (payer, id, openMarkets) => build('open_round', { payer, round: roundPda(id) }, { id, open_markets: openMarkets }),
-  joinRound: (signer, player, id, side, sessionToken = null) =>
-    build('join_round', {
-      signer, player, profile: profilePda(player), round: roundPda(id), player_usdc: ataOf(player, mint()), vault: VAULT, session_token: sessionToken,
-    }, { id, side }),
-  delegateRound: (payer, id, validator) => {
-    const round = roundPda(id);
-    return build('delegate_round', {
-      payer, round, buffer_round: bufferPda(round), delegation_record_round: delegationRecordPda(round), delegation_metadata_round: delegationMetadataPda(round),
-    }, { id }, validatorMeta(validator));
-  },
-  /// `winners`: the 1st / 2nd / 3rd players' wallets (as many as were paid).
-  settleRound: (caller, id, winners) =>
-    build('settle_round', { caller, round: roundPda(id), vault: VAULT }, { id },
-      winners.map((w) => ({ pubkey: ataOf(w, mint()), isSigner: false, isWritable: true }))),
-  recordRound: (caller, id, players) =>
-    build('record_round', { caller, round: roundPda(id) }, { id },
-      players.map((p) => ({ pubkey: profilePda(p), isSigner: false, isWritable: true }))),
-
   openPack: (payer, player, sessionToken = null) => build('open_pack', { payer, player, profile: profilePda(player), session_token: sessionToken }),
 
   // ------------------------------------------------------------ the rollup
@@ -94,10 +76,6 @@ export const ix = {
   tickRun: (player, asset) => build('tick_run', { run: runPda(player), feed: feedOf(asset) }),
   cashOut: (payer, player, asset) => build('cash_out', { payer, run: runPda(player), feed: feedOf(asset) }),
   finishRun: (payer, player, asset) => build('finish_run', { payer, run: runPda(player), feed: feedOf(asset) }),
-  goLive: (payer, id, asset, crank = true) => build('go_live', { payer, round: roundPda(id), feed: feedOf(asset) }, { id, crank }),
-  tickRound: (id, asset) => build('tick_round', { round: roundPda(id), feed: feedOf(asset) }),
-  cashOutRound: (signer, id, asset) => build('cash_out_round', { signer, round: roundPda(id), feed: feedOf(asset) }, { id }),
-  finishRound: (payer, id, asset) => build('finish_round', { payer, round: roundPda(id), feed: feedOf(asset) }, { id }),
 };
 
 // ------------------------------------------------------- other programs
