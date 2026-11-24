@@ -465,7 +465,7 @@ function publicRound(id = shownRoundId()) {
   const mine = myIndex(r);
   const joinable = r && r.status === ROUND.OPEN && r.layer === 'base' && now < startsAt - 1500;
   return {
-    id, assetId: drawing ? lastAsset : MARKETS[r.asset].id, drawing, opensAt, startsAt, endsAt,
+    id, assetId: drawing || !r ? lastAsset : MARKETS[r.asset].id, drawing, opensAt, startsAt, endsAt,
     status: now < startsAt ? 'open' : 'live', players: r ? r.players : 0, pot: r ? r.pot / ONE_USDC : 0, entry: ROUND_ENTRY,
     joined: mine >= 0, late: mine < 0 && now >= startsAt - 1500, joinable: !!joinable || (!r && now < startsAt - 4000),
     runId: mine >= 0 ? `round:${id}` : null, chainStatus: r ? r.status : null, unopened,
