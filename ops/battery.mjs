@@ -76,12 +76,15 @@ function loadSess(w) {
 }
 const saveSess = (w, s) => fs.writeFileSync(sessFile(w), JSON.stringify({ secret: Array.from(s.keypair.secretKey), validUntil: s.validUntil }), { mode: 0o600 });
 
+// Top-up of the players' SOL (session-key fuel); lower both on a tight deployer budget.
+const FUND_MIN = Number(process.env.BATTERY_FUND_MIN || 0.03) * 1e9;
+const FUND_AMOUNT = Number(process.env.BATTERY_FUND_AMOUNT || 0.075) * 1e9;
 async function fundAll() {
   const need = [];
-  for (const w of wallets) if ((await base.getBalance(w.publicKey)) < 0.03e9) need.push(w);
+  for (const w of wallets) if ((await base.getBalance(w.publicKey)) < FUND_MIN) need.push(w);
   for (let i = 0; i < need.length; i += 8) {
     const batch = need.slice(i, i + 8);
-    await timed('fund players (8 per tx)', () => send(base, batch.map((w) => SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: w.publicKey, lamports: 0.075e9 })), [admin], { label: 'fund' }));
+    await timed('fund players (8 per tx)', () => send(base, batch.map((w) => SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: w.publicKey, lamports: FUND_AMOUNT })), [admin], { label: 'fund' }));
   }
   return need.length;
 }
