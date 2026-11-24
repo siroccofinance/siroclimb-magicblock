@@ -245,6 +245,8 @@ function renderLobby() {
   renderClosed();
   api.watchRounds(C.mode === 'round');
   $('#modeHint').textContent = C.mode === 'solo' ? (STAIRS ? 'The coin rolls on the live price. Leverage grows every 6 seconds.' : 'Climb at your own pace. The coin steps up every 6 seconds.')
+    : round.marketsOpen === false ? 'Every market is closed right now. Rounds resume when one opens.'
+    : round.unopened ? 'Nobody opened this round. The next one opens soon: join it and the market is drawn for everyone.'
     : round.drawing ? "Drawing this round's market with MagicBlock's verifiable randomness…" : `60 seconds on ${byId[round.assetId].ticker} for everyone. The top 3 share the pot.`;
   $('#entryV').textContent = round.entry;
   renderGo();
@@ -274,6 +276,7 @@ function renderGo() {
   }
   const r = round, pot = `${r.players} ${r.players === 1 ? 'player' : 'players'}, pot ${money(r.pot)} tUSDC`;
   if (r.joined) { go.disabled = true; go.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}`; meta.textContent = `You are in. ${pot}`; }
+  else if (r.marketsOpen === false && !r.joined) { go.disabled = true; go.textContent = 'Markets closed'; meta.textContent = 'Stocks, gold and the pound are all outside their trading hours.'; }
   else if (r.status === 'open' && r.drawing && r.players) { go.disabled = true; go.textContent = 'Drawing the market…'; meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`; }
   else if (r.status === 'open' && !r.late && r.joinable !== false) {
     go.disabled = busy; go.textContent = busy ? 'Joining…' : api.account() && bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;
@@ -282,7 +285,7 @@ function renderGo() {
 }
 api.onRound(r => {
   const was = round; round = r;
-  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId || was.drawing !== r.drawing) renderLobby(); else { renderGo(); renderClosed(); } }
+  if (screen === 'lobby') { if (!was || was.id !== r.id || was.assetId !== r.assetId || was.drawing !== r.drawing || was.unopened !== r.unopened) renderLobby(); else { renderGo(); renderClosed(); } }
   if (screen === 'game' && run && run.mode === 'round') renderStandings();
 });
 
