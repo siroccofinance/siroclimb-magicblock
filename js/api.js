@@ -78,6 +78,7 @@ export const pack = opt('pack', () => null);
 export const proof = opt('proof', () => []);
 export const explorer = opt('explorer', null);
 export const sessionInfo = opt('sessionInfo', async () => null);
+export const walletKind = opt('walletKind', () => 'demo');
 export const climbsLeft = opt('climbsLeft', async () => Infinity);
 export const setName = opt('setName', async (n) => n);
 export const user = opt('user', () => ({ name: 'You' }));
