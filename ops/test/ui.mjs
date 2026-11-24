@@ -38,7 +38,7 @@ await wait(800);
 const open = await pg.$$eval('.market', (els) => els.filter((e) => !e.classList.contains('is-closed')).map((e) => e.dataset.v));
 say('open markets', open.join(' '));
 if (FLOW === 'round') { await pg.click('#mode [data-v=round]'); await wait(500); }
-else { await pg.click('#mode [data-v=solo]'); await wait(300); await pg.click(`.market[data-v="${open[0]}"]`); }
+else { await pg.click('#mode [data-v=solo]'); await wait(300); await pg.click(`.market[data-v="${process.env.MARKET && open.includes(process.env.MARKET) ? process.env.MARKET : open[0]}"]`); }
 await pg.screenshot({ path: 'out/ui-1lobby.png' });
 if (FLOW === 'round') {
   // join when the window is open
