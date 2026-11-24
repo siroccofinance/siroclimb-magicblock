@@ -51,7 +51,7 @@ Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlo
 
 ## Battery players
 
-The 24 battery players (realistic handles: saffron301, dune.sol, ghibli_hunter, gecko_fx, bora.sol, wolfx, …) are keypairs under `~/.config/siroclimb/battery/`; their profiles, climbs and round seats are on chain and fill the public leaderboard. Latest run: 400 / 400 checks on the upgraded program ([BATTERY.md](BATTERY.md)).
+The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan156, nvidiasmith24, bora692, …) are new keypairs under `~/.config/siroclimb/solana/battery/`, funded only by the deployer; their profiles, climbs and round seats are on chain and fill the public leaderboard. Latest run: 404 / 404 checks on this deployment ([BATTERY.md](BATTERY.md)).
 
 ## Integration proof (explorer)
 
