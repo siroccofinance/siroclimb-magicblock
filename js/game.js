@@ -23,6 +23,7 @@ const money = v => nf.format(v);
 const sgn = v => (v < -0.0049 ? MINUS : '+');
 const signed = v => sgn(v) + nf.format(Math.abs(v));
 const pct = v => sgn(v) + Math.abs(v).toFixed(2) + '%';
+const small = v => (v > 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(3));   // borrow costs are cents
 const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));
 const levTxt = x => (x % 1 ? x.toFixed(1) : String(x)) + 'x';
 const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -259,7 +260,7 @@ function renderGo() {
   const open = api.marketOpen(C.asset);
   go.disabled = busy || !open;
   go.textContent = busy ? 'Starting…' : !open ? 'Market closed' : !api.account() ? 'Connect to climb' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
-  meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x` : `${byId[C.asset].ticker} is outside its trading hours${opensIn(C.asset)}. Pick an open market.`;
+  meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x with ${money(C.stake * 3)} borrowed from the Sirocco Reserve` : `${byId[C.asset].ticker} is outside its trading hours${opensIn(C.asset)}. Pick an open market.`;
 }
 $('#go').onclick = async () => {
   if (busy) return;
@@ -301,6 +302,7 @@ function enterGame(r) {
   if (!r || run) return;
   run = r; upd = null; shownStep = 0; ended = null;
   Object.assign(D, { value: r.stake, pnl: 0, pct: 0, danger: 0 });
+  $('#pB').textContent = '';
   if (sc && (!G || G.end)) park();                    // normally the coin is already parked from the lobby
   if (G) { G.steps = []; G.dangerTo = 0; G.end = null; G.go = (performance.now() - G.t0) / 1000; }
   if (STAIRS) startTrack(r);
@@ -341,6 +343,8 @@ function hudFrame(dt) {
   $('#pP').textContent = pct(D.pct);
   $('#pL').textContent = levTxt(run.ladder[shownStep]);
   $('#cashV').textContent = money(Math.max(0, D.value));
+  if (u) $('#pB').innerHTML = run.pack ? `Playing <b>${money(u.borrowed)} tUSDC</b> of the Sirocco Reserve's money`
+    : u.borrowed > 0 ? `Borrowed <b>${money(u.borrowed)} tUSDC</b> from the Sirocco Reserve · cost so far ${small(u.borrowCost)}` : 'Your own stake only at 1x: borrowing starts at 1.5x';
   const left = Math.max(0, 1 - D.danger);
   $('#sBar').style.transform = `scaleX(${left})`;
   $('#sTxt').textContent = D.danger < 0.02 ? 'Stake safe' : `${Math.round(left * 100)}% of stake left`;
@@ -394,6 +398,8 @@ function showResult(res) {
   const a = byId[run.assetId];
   const stats = [['Return', pct(res.pnlPct)], ['Top leverage', levTxt(res.maxLeverage)], ['Time', `${Math.max(1, Math.round(res.duration))}s`],
     [`${a.ticker} entry`, price(res.entryPrice)], ['Exit', price(res.exitPrice)]];
+  if (res.peakBorrow > 0) stats.push(['Borrowed up to', `${money(res.peakBorrow)} tUSDC`]);
+  if (!res.pack && res.borrowCost != null) stats.push(['Borrow cost paid', `${small(res.borrowCost)} tUSDC`]);
   $('#rS').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   showProof(run.id);
 }
@@ -516,6 +522,7 @@ function openSheet(id) {
   const el = document.getElementById(id); el.hidden = false; openSheetEl = el; lastFocus = document.activeElement;
   el.querySelector('.sheet__card').focus({ preventScroll: true });
   if (id === 'board') loadBoard(store.get('board', 'today'));
+  if (id === 'reserve') loadReserve();
   if (id === 'packSheet') renderPack(true);
 }
 function closeSheet(now) {
@@ -530,6 +537,32 @@ const id = el => el.id;
 document.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openSheet(b.dataset.open); }));
 document.querySelectorAll('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-close]')) closeSheet(); }));
 $('#boardTabs').querySelectorAll('button').forEach(b => b.onclick = () => loadBoard(b.dataset.v));
+// ── Sirocco Reserve: the pool every climb borrows from; anyone can lend to it
+async function loadReserve() {
+  const R = await api.reserveInfo().catch(() => null);
+  if (!R) { $('#resStats').innerHTML = '<div><dt>Status</dt><dd>Opening soon</dd></div>'; return; }
+  const big = v => (v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'k' : money(v));
+  const rows = [['TVL', `${big(R.tvl)} tUSDC`], ['Utilization', `${(R.utilization * 100).toFixed(2)}%`], ['Borrow lines open', `${big(R.lines)} tUSDC`],
+    ['Share price', R.sharePrice.toFixed(6)], ['Lender APY', `${R.apy >= 0 ? '' : '−'}${Math.abs(R.apy * 100).toFixed(2)}%`], ['Borrow APR + fee', `${R.aprBorrow}% + ${(R.feeBps / 100).toFixed(1)}%`]];
+  $('#resStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  $('#resMe').innerHTML = R.me && R.me.shares > 0 ? `You lend <b>${money(R.me.value)} tUSDC</b> (${money(R.me.shares)} shares).`
+    : api.account() ? 'You have nothing lent yet.' : 'Connect a wallet to lend.';
+  resLast = R;
+}
+let resLast = null;
+async function reserveAct(kind) {
+  if (!(await connect(true))) return;
+  const amt = Number($('#resAmt').value);
+  const btns = [$('#resDeposit'), $('#resWithdraw')]; btns.forEach(b => b.disabled = true);
+  try {
+    if (kind === 'deposit') { await api.deposit(amt); toast(`${money(amt)} tUSDC lent to the Sirocco Reserve`); }
+    else { const all = resLast && resLast.me && amt >= resLast.me.value; await api.withdraw(amt, all); toast(`${all ? 'Everything' : money(amt) + ' tUSDC'} withdrawn from the reserve`); }
+    sound.tick();
+  } catch (e) { toast(e.message); }
+  finally { btns.forEach(b => b.disabled = false); loadReserve(); }
+}
+$('#resDeposit').onclick = () => reserveAct('deposit');
+$('#resWithdraw').onclick = () => reserveAct('withdraw');
 async function loadBoard(scope) {
   if (scope !== 'all') scope = 'today';
   store.set('board', scope);

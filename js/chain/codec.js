@@ -62,7 +62,23 @@ export function decodeRun(data) {
     player: r.key(), session: r.key(), nonce: r.u32(), status: r.u8(), mode: r.u8(), asset: r.u8(), side: r.u8(), top: r.u8(), packTier: r.u8(),
     stake: r.u64(), value: r.u64(), entryPrice: r.u64(), lastPrice: r.u64(), createdTs: r.i64(), startTs: r.i64(), lastTickTs: r.i64(), endTs: r.i64(),
     maxStep: r.u8(), ticks: r.u32(), payout: r.u64(), taskId: r.i64(),
+    // Sirocco Reserve fields (zero on a run account from before the reserve)
+    ...(r.skip(1), r.o + 32 <= r.d.length ? { borrowed: r.u64(), cost: r.u64(), reserved: r.u64(), line: r.u64() } : { borrowed: 0, cost: 0, reserved: 0, line: 0 }),
   };
+}
+/// Size of a run account with the reserve fields (older ones are grown by `grow_run`).
+export const RUN_SIZE = 8 + 32 + 32 + 4 + 6 + 8 * 8 + 1 + 4 + 8 + 8 + 1 + 4 * 8;
+
+export function decodeReserve(data) {
+  const r = new Reader(data);
+  return {
+    shares: r.u64(), staked: r.u64(), reserved: r.u64(), lines: r.u64(), runs: r.u64(), borrowedVolume: r.u64(), fees: r.u64(),
+    paidToPlayers: r.u64(), keptFromPlayers: r.u64(), deposits: r.u64(), withdrawals: r.u64(), createdTs: r.i64(),
+  };
+}
+export function decodeLender(data) {
+  const r = new Reader(data);
+  return { owner: r.key(), shares: r.u64(), deposited: r.u64(), withdrawn: r.u64() };
 }
 
 export const NAME_LEN = 16;

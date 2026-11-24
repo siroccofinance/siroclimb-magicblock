@@ -4,10 +4,10 @@
 // (js/api.js), the in-browser practice bots, the keeper and the batteries.
 import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, RUN, USDC_MINT } from './config.js';
-import { decodePrice, decodeProfile, decodeRun } from './codec.js';
+import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, RUN, USDC_MINT, VAULT } from './config.js';
+import { RUN_SIZE, decodeLender, decodePrice, decodeProfile, decodeReserve, decodeRun } from './codec.js';
 import { approveIx, createAtaIdempotent, createSessionIx, ix } from './ix.js';
-import { ataOf, profilePda, runPda, sessionTokenPda } from './pdas.js';
+import { ataOf, lenderPda, profilePda, reservePda, runPda, sessionTokenPda } from './pdas.js';
 import { send, sleep } from './tx.js';
 
 export const SESSION_HOURS = 12;
@@ -78,7 +78,11 @@ export class Climber {
     const a = this.actor;
     const t0 = Date.now();
     const sideN = side === 'short' || side === 1 ? 1 : 0;
+    // a run account from before the Sirocco Reserve is grown in the same transaction
+    const old = await this.base.getAccountInfo(runPda(this.me));
+    const grow = old && old.owner.equals(PROGRAM_ID) && old.data.length < RUN_SIZE ? [ix.growRun(a.publicKey, this.me)] : [];
     const base = await send(this.base, [
+      ...grow,
       ix.startRun(a.publicKey, this.me, { asset, side: sideN, stake: BigInt(Math.round(stake * ONE_USDC)), usePack }, this.token),
       ix.delegateRun(a.publicKey, this.me, ER_VALIDATOR),
     ], [a], { label: 'start run' });
@@ -98,6 +102,25 @@ export class Climber {
   async settleRun(player = this.me) {
     await this.waitOnBase(runPda(player));
     return send(this.base, [ix.settleRun(this.actor.publicKey, player)], [this.actor], { label: 'settle run' });
+  }
+
+  // ----------------------------------------------------- Sirocco Reserve
+  /// The reserve and the vault balance it is measured against (raw units).
+  async reserve() {
+    const [a, v] = await Promise.all([this.base.getAccountInfo(reservePda()), this.base.getTokenAccountBalance(VAULT)]);
+    return a ? { ...decodeReserve(a.data), vault: Number(v.value.amount) } : null;
+  }
+  async lender(owner = this.me) {
+    const a = await this.base.getAccountInfo(lenderPda(owner));
+    return a ? decodeLender(a.data) : null;
+  }
+  /// Lend `amount` tUSDC to the reserve (session key as the wallet's spender).
+  async deposit(amount) {
+    return send(this.base, [ix.deposit(this.actor.publicKey, this.me, BigInt(Math.round(amount * ONE_USDC)), this.token)], [this.actor], { label: 'deposit' });
+  }
+  /// Redeem `shares` (raw) for tUSDC.
+  async withdrawShares(shares) {
+    return send(this.base, [createAtaIdempotent(this.actor.publicKey, this.me), ix.withdraw(this.actor.publicKey, this.me, BigInt(shares), this.token)], [this.actor], { label: 'withdraw' });
   }
 
   // -------------------------------------------------------------- packs

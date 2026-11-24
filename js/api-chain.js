@@ -12,17 +12,18 @@
 import { Connection } from '@solana/web3.js';
 import {
   BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
-  RUN, RUN_SECONDS, STEP_SECONDS, PACK, marketIndex,
+  RUN, RUN_SECONDS, STEP_SECONDS, PACK, VAULT, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
-import { decodePrice, decodeProfile, decodeRun, discriminator } from './chain/codec.js';
+import { decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
-import { runPda } from './chain/pdas.js';
+import { reservePda, runPda } from './chain/pdas.js';
 import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor } from './chain/handles.js';
 import { inSession, nextOpen } from './chain/hours.js';
 import { recentPrices } from './chain/history.js';
+import { borrowCost, borrowedAt, reserveView, valueOf } from './chain/reserve.js';
 import { dropSession, injectedWallets, loadSession, openWallet, saveSession } from './chain/wallet.js';
 
 const base = new Connection(BASE_RPC, 'confirmed');
@@ -259,10 +260,13 @@ function resultOf(R) {
   const value = c.value / ONE_USDC;
   const st = c.status === RUN.SETTLED ? R.endStatus || 'cashed' : STATUS[c.status] || 'cashed';
   const end = c.endTs || Math.floor(Date.now() / 1000);
-  // a pack climb is played with the house's money: the player only ever gains
-  const pnl = R.pub.pack ? Math.max(0, value - stake) : value - stake;
+  // a pack climb is played with the reserve's money: the player only ever gains;
+  // a solo climb pays its borrow cost (fee + interest) to the Sirocco Reserve
+  const cost = R.pub.pack || !c.startTs ? 0 : (c.cost || Math.min(c.value, borrowCost(c.stake, end - c.startTs, R.top, c.maxStep || 0))) / ONE_USDC;
+  const pnl = R.pub.pack ? Math.max(0, value - stake) : value - cost - stake;
   return {
-    status: st, value: R.pub.pack ? stake + pnl : value, pnl, pnlPct: (value / stake - 1) * 100, maxLeverage: LADDER[c.maxStep || 0], pack: !!R.pub.pack,
+    status: st, value: R.pub.pack ? stake + pnl : value - cost, pnl, pnlPct: (value / stake - 1) * 100, maxLeverage: LADDER[c.maxStep || 0], pack: !!R.pub.pack,
+    borrowCost: cost, peakBorrow: (R.pub.pack ? stake * LADDER[c.maxStep || 0] : borrowedAt(c.stake, c.maxStep || 0) / ONE_USDC),
     duration: Math.max(0, Math.min(RUN_SECONDS, end - c.startTs)), entryPrice: toUsd(a, c.entryPrice), exitPrice: toUsd(a, c.lastPrice || c.entryPrice),
   };
 }
@@ -272,9 +276,12 @@ function updateOf(R, now = Date.now()) {
   const step = stepAt(t, R.top);
   let value = c.value / ONE_USDC, price = toUsd(a, c.lastPrice || c.entryPrice);
   if (c.status === RUN.LIVE && isOpen(f) && c.lastPrice) { value = moved(value, LADDER[step], c.side, BOOST[a], c.lastPrice, f.raw); price = f.price; }
+  // borrowed from the Sirocco Reserve at this step, and the loan's cost so far
+  const borrowed = R.pub.pack ? stake * LADDER[step] : borrowedAt(c.stake, step) / ONE_USDC;
+  const cost = R.pub.pack ? 0 : borrowCost(c.stake, t, R.top, Math.max(step, c.maxStep || 0)) / ONE_USDC;
   return {
     t, price, step, leverage: LADDER[step], value, pnl: value - stake, pnlPct: (value / stake - 1) * 100,
-    risk: Math.min(1, Math.max(0, 1 - value / stake)), status: STATUS[c.status] || 'live',
+    risk: Math.min(1, Math.max(0, 1 - value / stake)), status: STATUS[c.status] || 'live', borrowed, borrowCost: cost,
   };
 }
 function priceTick(now) {
@@ -375,6 +382,42 @@ export async function cashOut(id) {
     if (!R.result) throw fail(e);
   }
   return whenEnded(id);
+}
+
+// ─────────────────────────────────────────────── Sirocco Reserve (lending pool)
+/// The reserve as the UI shows it, plus the connected wallet's position.
+export async function reserveInfo() {
+  const [a, vb] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT)]);
+  if (!a) return null;
+  const rs = { ...decodeReserve(a.data), vault: Number(vb.value.amount) };
+  const v = reserveView(rs, rs.vault);
+  let me = null;
+  if (climber) {
+    const l = await climber.lender().catch(() => null);
+    if (l) me = { shares: l.shares / ONE_USDC, value: valueOf(l.shares, Math.max(0, rs.vault - rs.staked), rs.shares) / ONE_USDC, deposited: l.deposited / ONE_USDC, withdrawn: l.withdrawn / ONE_USDC, rawShares: l.shares };
+  }
+  return { ...v, me };
+}
+/// Lend `amount` tUSDC to the reserve.
+export async function deposit(amount) {
+  if (!climber) await connect();
+  if (!(amount >= 1 && amount <= bal)) throw new Error('Not enough test tokens');
+  try { await ensureReady(); const sig = await climber.deposit(amount); await refreshBalance(); return sig; } catch (e) { throw fail(e); }
+}
+/// Withdraw about `amount` tUSDC (as shares at the share price); `all` redeems every share.
+export async function withdraw(amount, all = false) {
+  if (!climber) await connect();
+  try {
+    await ensureReady();
+    const [rs, l] = await Promise.all([climber.reserve(), climber.lender()]);
+    if (!l || !l.shares) throw new Error('Nothing lent to the reserve yet');
+    const assets = Math.max(0, rs.vault - rs.staked);
+    const shares = all ? l.shares : Math.min(l.shares, Math.floor((Math.round(amount * ONE_USDC) * rs.shares) / assets));
+    if (!(shares > 0)) throw new Error('Pick an amount to withdraw');
+    const sig = await climber.withdrawShares(shares);
+    await refreshBalance();
+    return sig;
+  } catch (e) { throw fail(e); }
 }
 
 // ───────────────────────────────────────────────────────── leaderboards

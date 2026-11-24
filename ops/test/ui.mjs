@@ -40,7 +40,8 @@ say('open markets', open.join(' '));
 await pg.click(`.market[data-v="${process.env.MARKET && open.includes(process.env.MARKET) ? process.env.MARKET : open[0]}"]`);
 await pg.screenshot({ path: 'out/ui-1lobby.png' });
 const connected = /^\w{4}…\w{4}$/.test(await text('#wallet'));
-if (!(FLOW === 'menu' && connected)) await pg.click(FLOW === 'menu' ? '#wallet' : '#go');
+const byMenu = FLOW === 'menu' || FLOW === 'reserve';
+if (!(byMenu && connected)) await pg.click(byMenu ? '#wallet' : '#go');
 // no browser wallet in headless Chrome: the burner is the only choice, picked directly
 await wait(800);
 if (await pg.$('#walletSheet:not([hidden])')) { await pg.screenshot({ path: 'out/ui-2wallets.png' }); await pg.click('#walletList [data-w=burner]'); }
@@ -57,6 +58,22 @@ if (FLOW === 'menu') {
   await pg.click('#wallet'); await wait(800);
   say('renamed', await text('#walletWho'));
   await pg.screenshot({ path: 'out/ui-6menu.png' });
+} else if (FLOW === 'reserve') {
+  // the Sirocco Reserve panel: stats, lend 25 tUSDC, withdraw everything
+  await until(async () => /^\w{4}…\w{4}$/.test(await text('#wallet')), 90000, 'connected');
+  await pg.click('[data-open=reserve]');
+  await until(async () => /TVL/.test(await text('#resStats')), 30000, 'reserve stats');
+  say('reserve', (await pg.$$eval('#resStats div', (d) => d.map((x) => x.textContent))).join(' | '));
+  const bal0 = await text('#bal');
+  await pg.$eval('#resAmt', (e) => { e.value = '25'; });
+  await pg.click('#resDeposit');
+  await until(async () => /You lend/.test(await text('#resMe')), 60000, 'deposit');
+  say('after deposit', await text('#resMe'), '| balance', bal0, '->', await text('#bal'));
+  await pg.screenshot({ path: 'out/ui-7reserve.png' });
+  await pg.$eval('#resAmt', (e) => { e.value = '1000'; });
+  await pg.click('#resWithdraw');
+  await until(async () => /nothing lent/.test(await text('#resMe')), 60000, 'withdraw');
+  say('after withdraw', await text('#resMe'), '| balance', await text('#bal'));
 } else if (FLOW === 'pack') {
   // a first climb onboards the burner; then the pack: VRF draw, free climb on the house
   await until(async () => (await scr()) === 'game', 90000, 'game screen');
@@ -80,10 +97,10 @@ if (FLOW === 'menu') {
   say('climbing', await text('#hT'), await text('#hP'));
   await wait(9000);
   await pg.screenshot({ path: 'out/ui-3game.png' });
-  say('pnl', await text('#pV'), 'lev', await text('#pL'));
+  say('pnl', await text('#pV'), 'lev', await text('#pL'), '|', await text('#pB'));
   await pg.click('#cash');
   await until(async () => (await scr()) === 'result', 30000, 'result');
-  say('result', await text('#rE'), await text('#rV'));
+  say('result', await text('#rE'), await text('#rV'), '|', (await pg.$$eval('#rS div', (d) => d.map((x) => x.textContent))).slice(-2).join(' | '));
   await until(async () => (await pg.$$('#rProof a')).length >= 4, 30000, 'proof links');
   say('proof', (await pg.$$eval('#rProof a', (as) => as.map((a) => a.textContent))).join(' | '));
   await pg.screenshot({ path: 'out/ui-4result.png' });

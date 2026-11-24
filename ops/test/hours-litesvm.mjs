@@ -69,6 +69,8 @@ const utc = (s) => Math.floor(Date.parse(s) / 1000);
 at(utc('2026-11-23T15:00:00Z'));
 let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
 ok('initialize', r.ok, r.logs.slice(-2).join(' '));
+r = send([ix.initReserve(admin.publicKey)], [admin]);
+ok('the Sirocco Reserve opens on the bankroll', r.ok, r.logs.slice(-2).join(' '));
 r = send([createAtaIdempotent(player.publicKey, player.publicKey), ix.faucet(player.publicKey), ix.initProfile(player.publicKey, 'nomad_trader')], [player]);
 ok('player: token account, faucet, profile', r.ok, r.logs.slice(-2).join(' '));
 

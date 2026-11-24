@@ -1,5 +1,6 @@
 // One-time devnet setup (idempotent): test-USDC mint (authority = config PDA),
-// house vault (token account owned by config), config, house bankroll.
+// house vault (token account owned by config), config, the bankroll and the
+// Sirocco Reserve opened on it (the deployer is its first lender).
 // Writes js/chain/deployment.js for the front and the scripts.
 import fs from 'fs';
 import { Keypair, SystemProgram, TransactionInstruction } from '@solana/web3.js';
@@ -58,10 +59,17 @@ console.log('config', config.toBase58(), 'mint', mintKey.toBase58(), 'vault', va
 
 // Reload the modules with the deployment written.
 const { ix: ix2 } = await import('../js/chain/ix.js?with-deployment');
-const vaultBal = await conn.getTokenAccountBalance(vaultKey);
-const want = Number(process.env.HOUSE_BANKROLL || 5_000_000);
-if (Number(vaultBal.value.uiAmount) < want / 2) {
-  const sig = await send(conn, [ix2.fundHouse(admin.publicKey, BigInt(want) * 1_000_000n, mintKey, vaultKey)], [admin], { label: 'fund house' });
-  console.log('house funded with', want, 'tUSDC', sig);
+const { reservePda } = await import('../js/chain/pdas.js');
+if (!(await conn.getAccountInfo(reservePda()))) {
+  // the bankroll is minted to the vault, then the reserve opens on it: the
+  // deployer's lender position (after this, minting would be a gift to lenders)
+  const vaultBal = await conn.getTokenAccountBalance(vaultKey);
+  const want = Number(process.env.HOUSE_BANKROLL || 5_000_000);
+  if (Number(vaultBal.value.uiAmount) < want / 2) {
+    const sig = await send(conn, [ix2.fundHouse(admin.publicKey, BigInt(want) * 1_000_000n, mintKey, vaultKey)], [admin], { label: 'fund house' });
+    console.log('bankroll minted:', want, 'tUSDC', sig);
+  }
+  const sig = await send(conn, [ix2.initReserve(admin.publicKey, vaultKey)], [admin], { label: 'open reserve' });
+  console.log('Sirocco Reserve', reservePda().toBase58(), 'opened, the deployer is its first lender', sig);
 }
 console.log('setup done');

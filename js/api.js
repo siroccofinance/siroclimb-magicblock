@@ -20,6 +20,8 @@
 //   onRun(runId, cb)                         → unsubscribe()      cb(RunUpdate) on every price tick
 //   cashOut(runId)                           → Promise<RunResult>
 //   leaderboard(scope)                       → Promise<Standing[]> scope 'today' | 'all'
+//   reserveInfo()                            → Promise<Reserve|null> the Sirocco Reserve (lending pool) and your position
+//   deposit(amount) / withdraw(amount, all?) → Promise<sig>       lend tUSDC to the reserve / take it back at the share price
 //   balance()                                → number
 //   onBalance(cb)                            → unsubscribe()
 //   faucet()                                 → Promise<number>    tops the test balance back up
@@ -31,8 +33,10 @@
 //   shareCard(png, result)                   → Promise<string|null> optional: host the share picture (null = not hosted)
 //
 // Run        { id, mode, assetId, side, stake, entryPrice, startedAt, ladder, stepEvery, duration }
-// RunUpdate  { t (s since start), price, step, leverage, value, pnl, pnlPct, risk (0..1 of the stake lost), status }
-// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice }
+// RunUpdate  { t (s since start), price, step, leverage, value, pnl, pnlPct, risk (0..1 of the stake lost), status, borrowed, borrowCost }
+// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice, borrowCost, peakBorrow }
+// Reserve    { tvl, sharePrice, free, reserved, lines, utilization (0..1), apy, fees, runs, borrowedVolume, aprBorrow, feeBps,
+//              me: { shares, value, deposited, withdrawn } | null }
 
 const MOCK = new URLSearchParams(location.search).has('mock');
 const impl = MOCK ? await import('./api-mock.js') : await import('./api-chain.js');
@@ -59,6 +63,9 @@ export const runResult = (...a) => impl.runResult(...a);
 export const whenEnded = (...a) => impl.whenEnded(...a);
 export const runInfo = (...a) => impl.runInfo(...a);
 export const leaderboard = (...a) => impl.leaderboard(...a);
+export const reserveInfo = opt('reserveInfo', async () => null);
+export const deposit = (...a) => impl.deposit(...a);
+export const withdraw = (...a) => impl.withdraw(...a);
 export const balance = () => impl.balance();
 export const onBalance = (...a) => impl.onBalance(...a);
 export const faucet = (...a) => impl.faucet(...a);

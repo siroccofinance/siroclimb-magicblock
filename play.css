@@ -219,6 +219,8 @@ body[data-screen="intro"] .stage::before { opacity: 0; }
 .safety.is-warn .safety__bar i { background: var(--safran); }
 .safety.is-hot .safety__bar i { background: var(--safran); animation: blink .7s ease-in-out infinite; }
 .safety.is-hot { color: var(--ink); }
+.borrow { margin-top: 6px; font-size: 14px; color: var(--ink-soft); min-height: 1.4em; }
+.borrow b { color: var(--ink); font-weight: 600; }
 @keyframes blink { 50% { opacity: .35; } }
 
 .cta--cash { min-width: 260px; height: 72px; font-size: 19px; gap: 14px; }
@@ -289,6 +291,20 @@ body[data-screen="intro"] .stage::before { opacity: 0; }
 .board .n { font-weight: 600; color: rgba(43, 33, 26, .45); }
 .board .v { font-weight: 600; }
 .board .empty { grid-template-columns: 1fr; color: rgba(43, 33, 26, .55); }
+.reserve__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 16px; margin: 20px 0 0; }
+.reserve__stats div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: rgba(43, 33, 26, .05); }
+.reserve__stats dt { font-size: 12px; color: rgba(43, 33, 26, .55); }
+.reserve__stats dd { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink-d); font-variant-numeric: tabular-nums; }
+.reserve__me { margin-top: 16px; font-size: 15px; color: rgba(43, 33, 26, .75); min-height: 1.45em; }
+.reserve__me b { color: var(--ink-d); }
+.reserve__form { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: 14px; }
+.reserve__amt { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(43, 33, 26, .18); }
+.reserve__amt input { width: 100%; border: 0; outline: 0; font: inherit; font-size: 17px; font-weight: 600; color: var(--ink-d); background: none; }
+.reserve__amt span { font-size: 13px; color: rgba(43, 33, 26, .55); }
+.reserve__btn { height: 48px; padding: 0 18px; border-radius: 10px; border: 1px solid rgba(43, 33, 26, .18); font-weight: 600; color: var(--ink-d); }
+.reserve__btn.is-main { background: var(--gold); border-color: var(--gold); }
+.reserve__btn:disabled { opacity: .5; cursor: default; }
+@media (max-width: 520px) { .reserve__stats { grid-template-columns: repeat(2, 1fr); } .reserve__form { grid-template-columns: 1fr 1fr; } .reserve__amt { grid-column: span 2; } }
 
 /* ───────── toast, wash ───────── */
 .toast { position: fixed; z-index: 40; left: 50%; top: calc(var(--top) + 4px); transform: translate(-50%, -8px); padding: 10px 16px; border-radius: 10px; background: #fff; color: var(--ink-d); font-size: 15px; font-weight: 500; box-shadow: 0 16px 40px -16px rgba(43, 20, 10, .6); opacity: 0; pointer-events: none; transition: opacity .25s var(--ease), transform .35s var(--ease-out); white-space: nowrap; }

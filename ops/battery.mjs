@@ -11,15 +11,20 @@
 //                committed back to Solana equal to the rollup's).
 //   refusals     what must fail does, with the expected program error.
 //   packs        concurrent VRF pack draws, then the free climbs they give.
+//   reserve      players lend to the Sirocco Reserve and withdraw at the share
+//                price; every climb reserves liquidity and a borrow line, pays
+//                its borrow cost, and the reserve is square once all settle.
 // Writes BATTERY.md; every bug it finds goes to FINDINGS.md.
 import fs from 'fs';
 import path from 'path';
 import { Keypair, SystemProgram } from '@solana/web3.js';
 import { Climber, readPrice } from '../js/chain/climber.js';
-import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, RUN, LADDER } from '../js/chain/config.js';
-import { decodeRun } from '../js/chain/codec.js';
+import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, RUN, LADDER, VAULT } from '../js/chain/config.js';
+let reserveSummary = '';
+import { RUN_SIZE, decodeLender, decodeReserve, decodeRun } from '../js/chain/codec.js';
+import { borrowCost, exposureOf, lineOf, valueOf } from '../js/chain/reserve.js';
 import { ix } from '../js/chain/ix.js';
-import { profilePda, runPda } from '../js/chain/pdas.js';
+import { lenderPda, profilePda, reservePda, runPda } from '../js/chain/pdas.js';
 import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
 import { uniqueHandles } from '../js/chain/handles.js';
@@ -118,8 +123,12 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   const prof0 = await c.profile();
   await sleep(rnd(0, 1500));
   const a = c.actor;
+  // a run account from before the reserve is grown in the same transaction
+  const old = await base.getAccountInfo(runPda(c.me));
+  const grow = old && old.owner.equals(PROGRAM_ID) && old.data.length < RUN_SIZE ? [ix.growRun(a.publicKey, c.me)] : [];
   // stake + delegate on Solana
   await timed('stake + delegate (Solana)', () => send(base, [
+    ...grow,
     ix.startRun(a.publicKey, c.me, { asset, side: side === 'short' ? 1 : 0, stake: BigInt(stake * ONE_USDC), usePack: !!opts.pack }, c.token),
     ix.delegateRun(a.publicKey, c.me),
   ], [a], { label: 'start' }));
@@ -133,6 +142,8 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   let r = decodeRun((await er.getAccountInfo(runPda(c.me))).data);
   check(tag, 'live at the oracle price', r.status === RUN.LIVE && r.entryPrice > 0, `status ${r.status}`);
   if (opts.pack) check(tag, 'pack climb capped at its tier', r.top === PACKS[opts.packTier].top && r.mode === 2, `top ${r.top}`);
+  const st = r.stake;
+  check(tag, 'the reserve set aside 4 x stake and a borrow line', r.reserved === exposureOf(st) && r.line === lineOf(st, r.top, !!opts.pack), `reserved ${r.reserved / 1e6} line ${r.line / 1e6}`);
   if (opts.refusals) {
     const stranger = climbers[(i + 1) % climbers.length];
     await refuse(tag, 'cash out signed by another player', 6000, () => send(er, [ix.cashOut(stranger.actor.publicKey, c.me, asset)], [stranger.actor], { label: 'steal', attempts: 1 }));
@@ -161,15 +172,38 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   const fin = decodeRun((await base.getAccountInfo(runPda(c.me))).data);
   const after = await usdcOf(c);
   const cost = opts.pack ? 0 : stake * ONE_USDC;
-  const want = opts.pack ? Math.max(0, fin.value - fin.stake) : fin.value;
-  check(tag, 'payout = position (pack: the gain only)', fin.payout === want && after - before === want - cost, `paid ${fin.payout / 1e6} delta ${(after - before) / 1e6}`);
+  const loan = opts.pack ? 0 : Math.min(fin.value, borrowCost(fin.stake, fin.endTs - fin.startTs, fin.top, fin.maxStep));
+  const want = opts.pack ? Math.max(0, fin.value - fin.stake) : fin.value - loan;
+  check(tag, 'payout = position - borrow cost (pack: the gain only)', fin.payout === want && fin.cost === loan && after - before === want - cost, `paid ${fin.payout / 1e6} cost ${fin.cost / 1e6} delta ${(after - before) / 1e6}`);
+  check(tag, 'reservation released at settlement', fin.reserved === 0 && fin.line === 0);
+  costs.push(fin.cost); flows.push(cost - fin.payout);
   const prof1 = await c.profile();
   check(tag, 'profile records the climb', prof1.runs === prof0.runs + 1 && prof1.history[0].stake === fin.stake, `runs ${prof0.runs}->${prof1.runs}`);
   await refuse(tag, 'settle twice', 6011, () => send(base, [ix.settleRun(c.actor.publicKey, c.me)], [c.actor], { label: 'twice', attempts: 1 }));
   return { status: erState.status, pnl: (fin.value - fin.stake) / 1e6, maxStep: fin.maxStep, ticks: fin.ticks };
 }
 
-const results = [];
+const results = [], costs = [], flows = [];
+const readReserve = async () => {
+  const [a, v] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT)]);
+  return { ...decodeReserve(a.data), vault: Number(v.value.amount) };
+};
+const reserve0 = await readReserve();
+
+// ---------------------------------------------------------------- lenders
+const lenders = field.slice(0, Math.min(3, field.length));
+const lent = [];
+for (const [k, c] of lenders.entries()) {
+  const tag = `${names[k]} lends`, amount = [50, 20, 35][k];
+  const l0 = await base.getAccountInfo(lenderPda(c.me)).then((x) => (x ? decodeLender(x.data).shares : 0));
+  const rs = await readReserve();
+  const expect = Math.floor((amount * ONE_USDC * rs.shares) / (rs.vault - rs.staked));
+  await timed('deposit (Solana)', () => c.deposit(amount));
+  const l1 = decodeLender((await base.getAccountInfo(lenderPda(c.me))).data).shares;
+  check(tag, `deposit ${amount} tUSDC: shares at the share price`, Math.abs(l1 - l0 - expect) <= Math.ceil(expect * 1e-4), `${(l1 - l0) / 1e6} shares, expected ${expect / 1e6}`);
+  lent.push({ c, k, shares: l1 });
+}
+if (lenders.length) await refuse('lenders', 'withdraw more shares than held', 6029, () => lenders[0].withdrawShares(lent[0].shares + 1));
 for (let w = 1; w <= WAVES; w++) {
   const markets = await openMarkets();
   if (!markets.length) { say('every market is closed: skipping solo waves'); break; }
@@ -213,6 +247,23 @@ for (let w = 1; w <= WAVES; w++) {
   }
 }
 
+// ----------------------------------------------------------- the reserve, square
+{
+  // lenders take everything back at the share price
+  for (const { c, k, shares } of lent) {
+    const rs = await readReserve(), due = valueOf(shares, rs.vault - rs.staked, rs.shares), u0 = await usdcOf(c);
+    await timed('withdraw (Solana)', () => c.withdrawShares(shares));
+    const got = (await usdcOf(c)) - u0;
+    check(`${names[k]} lends`, 'withdraw all shares at the share price', Math.abs(got - due) <= Math.ceil(due * 1e-4) && decodeLender((await base.getAccountInfo(lenderPda(c.me))).data).shares === 0, `got ${got / 1e6}, due ${due / 1e6}`);
+  }
+  const rs = await readReserve();
+  check('reserve', 'nothing reserved, staked or lent once every climb settled', rs.reserved === reserve0.reserved && rs.staked === reserve0.staked && rs.lines === reserve0.lines,
+    `reserved ${rs.reserved} staked ${rs.staked} lines ${rs.lines} (others may be playing: start ${reserve0.reserved}/${reserve0.staked}/${reserve0.lines})`);
+  check('reserve', 'borrow fees collected = the costs of the battery\'s climbs', rs.fees - reserve0.fees >= costs.reduce((a, b) => a + b, 0), `${(rs.fees - reserve0.fees) / 1e6} tUSDC`);
+  check('reserve', 'settled climbs counted', rs.runs - reserve0.runs >= costs.length, `${rs.runs - reserve0.runs} runs`);
+  reserveSummary = `Sirocco Reserve: ${costs.length} climbs drew on it, ${(costs.reduce((a, b) => a + b, 0) / 1e6).toFixed(4)} tUSDC of borrow costs paid, net result for lenders ${(flows.reduce((a, b) => a + b, 0) / 1e6).toFixed(2)} tUSDC; share price ${((rs.vault - rs.staked) / rs.shares).toFixed(6)}.`;
+}
+
 // ------------------------------------------------------------------ report
 const adminEnd = await base.getBalance(admin.publicKey);
 const passed = checks.filter((c) => c.ok).length;
@@ -221,6 +272,8 @@ const statuses = results.reduce((m, r) => ((m[r.status] = (m[r.status] || 0) + 1
 const md = `Run ${new Date(T0).toISOString()} · program \`${PROGRAM_ID.toBase58()}\` · rollup ${er.rpcEndpoint} · ${N} players · ${WAVES} solo waves · ${Math.round((Date.now() - T0) / 1000)} s
 
 **${passed} / ${checks.length} checks passed.** Admin SOL ${(adminStart / 1e9).toFixed(4)} -> ${(adminEnd / 1e9).toFixed(4)} (funding players).
+
+${reserveSummary}
 
 Solo climbs settled: ${results.length} (${Object.entries(statuses).map(([k, v]) => `${v} ${['free', 'staked', 'live', 'cashed', 'busted', 'expired', 'settled'][k] || k}`).join(', ')}), top leverage reached ${Math.max(0, ...results.map((r) => LADDER[r.maxStep]))}x.
 

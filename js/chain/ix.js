@@ -9,7 +9,7 @@ import {
 } from './config.js';
 import { encodeIx, ixAccounts } from './codec.js';
 import {
-  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, profilePda, roundSlotPda, runPda,
+  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, lenderPda, profilePda, reservePda, roundSlotPda, runPda,
   vrfIdentityPda,
 } from './pdas.js';
 import * as PDAS from './pdas.js';
@@ -27,6 +27,7 @@ export function build(name, accs, args = {}, remaining = []) {
     let k = accs[a.name];
     if (k === undefined) {
       if (a.name === 'config') k = configPda();
+      else if (a.name === 'reserve') k = reservePda();
       else if (a.name === 'program_identity') k = vrfIdentityPda();
       else if (a.address) k = new PublicKey(a.address);
       else if (FIXED[a.name]) k = FIXED[a.name];
@@ -49,6 +50,17 @@ export const ix = {
   initialize: (admin, usdcMint, vault) => build('initialize', { admin, usdc_mint: usdcMint, vault }),
   fundHouse: (admin, amount, usdcMint = mint(), vault = VAULT) => build('fund_house', { admin, usdc_mint: usdcMint, vault }, { amount }),
   /// Close a retired round slot, its rent back to the admin.
+  // ------------------------------------------------- Sirocco Reserve (lending pool)
+  /// Open the reserve: the vault's tUSDC becomes the admin's lender position.
+  initReserve: (admin, vault = VAULT) => build('init_reserve', { admin, lender: lenderPda(admin), vault }),
+  /// Lend `amount` (raw tUSDC) for shares; the wallet or its session key signs.
+  deposit: (signer, owner, amount, sessionToken = null) =>
+    build('deposit', { signer, owner, lender: lenderPda(owner), owner_usdc: ataOf(owner, mint()), vault: VAULT, session_token: sessionToken }, { amount }),
+  /// Redeem `shares` (raw) for tUSDC at the share price.
+  withdraw: (signer, owner, shares, sessionToken = null) =>
+    build('withdraw', { signer, owner, lender: lenderPda(owner), owner_usdc: ataOf(owner, mint()), vault: VAULT, session_token: sessionToken }, { shares }),
+  /// Bring a run account written before the reserve to the current layout.
+  growRun: (payer, player) => build('grow_run', { payer, run: runPda(player), player }),
   closeRoundSlot: (admin, slot) => build('close_round_slot', { admin, round: roundSlotPda(slot) }, { slot }),
   /// `owner`: whose token account receives the top up (a session key claims for its wallet).
   faucet: (user, owner = user) => build('faucet', { user, claim: faucetPda(user), usdc_mint: mint(), user_usdc: ataOf(owner, mint()) }),

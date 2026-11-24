@@ -11,6 +11,9 @@ export const configPda = () => pda([s('config')]);
 export const faucetPda = (user) => pda([s('faucet'), user.toBuffer()]);
 export const profilePda = (user) => pda([s('profile'), user.toBuffer()]);
 export const runPda = (player) => pda([s('run'), player.toBuffer()]);
+/// The Sirocco Reserve (lending pool) and a lender's position in it.
+export const reservePda = () => pda([s('reserve')]);
+export const lenderPda = (owner) => pda([s('lender'), owner.toBuffer()]);
 /// The retired round slots (closed by `ops/close-round-slots.mjs`).
 export const roundSlotPda = (slot) => pda([s('round'), Buffer.from([slot])]);
 
