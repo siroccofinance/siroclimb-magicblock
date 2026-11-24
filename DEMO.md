@@ -1,9 +1,11 @@
 # Demo script (pitch video, about 3 minutes)
 
 Before recording: `npm run dev` (or the hosted site), a fresh browser profile, an
-open market (stocks: Sun 20:00 to Fri 20:00 New York; gold Sun 18:00 to Fri
-17:00; GBP/USD always via the relay). Optionally `npm run keeper` so a round
-is always open. Sound on.
+open market (stocks: Sun 20:00 to Fri 20:00 New York, closed on Thanksgiving
+until 20:00 and from 17:00 on the 27th; gold Sun 18:00 to Fri 17:00 with a
+daily hour off at 17:00; GBP/USD every day via the relay). The lobby shows a
+closed market as "Closed" with when it opens. Optionally `npm run keeper` so a
+round is always open. Sound on.
 
 ## 1. Hook (0:00 to 0:20)
 
