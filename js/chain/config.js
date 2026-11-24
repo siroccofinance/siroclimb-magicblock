@@ -54,7 +54,7 @@ export const MARKETS = [
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', lazerId: 922, exponent: -5, feed: 'B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1', hours: 'us-equity',
     mint: 'DsPehKph9sP6FXAQTQSuZj6Us8XcKk9YKXt8LWfkAoW', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
   { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', lazerId: 346, exponent: -3, feed: '9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn', hours: 'metal' },
-  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', lazerId: 333, exponent: -5, feed: '83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21', hours: 'fx', relay: true },
+  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', lazerId: 333, exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: 'fx', relay: true },
 ].map((m, index) => ({ ...m, index, feedKey: new PublicKey(m.feed) }));
 export const RELAY_ASSET = 4;
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);
