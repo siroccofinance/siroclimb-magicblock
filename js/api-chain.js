@@ -6,24 +6,21 @@
 //   wallet     Phantom / Solflare / Backpack, or a built-in devnet burner. One
 //              approval creates the profile, tops up test USDC, authorises a
 //              MagicBlock session key and lets it stake: every later action
-//              (start, cash out, join, packs, settle) is signed by that key.
+//              (start, cash out, packs, settle) is signed by that key.
 //   climbs     stake + delegate on Solana, begin / ticks (crank) / cash out on
-//              the rollup, commit + undelegate, settle on Solana.
-//   rounds     opened, delegated, started, finished and settled by whichever
-//              browser is around (autopilot): every step is permissionless.
-//              Practice bots run in this browser when a round is too empty.
-import { Connection, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
+//              the rollup, commit + undelegate, settle on Solana. Solo only.
+import { Connection } from '@solana/web3.js';
 import {
-  BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PRIZE_SPLIT, PROGRAM_ID,
-  ROUND, ROUND_CYCLE, ROUND_ENTRY, ROUND_JOIN_SECONDS, RUN, RUN_SECONDS, STEP_SECONDS, NONE, PACK, marketIndex,
+  BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
+  RUN, RUN_SECONDS, STEP_SECONDS, PACK, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
-import { decodePrice, decodeProfile, decodeRound, decodeRun, discriminator } from './chain/codec.js';
+import { decodePrice, decodeProfile, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
-import { profilePda, roundPda, roundSlotPda, runPda } from './chain/pdas.js';
+import { runPda } from './chain/pdas.js';
 import { send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
-import { handleFor, uniqueHandles } from './chain/handles.js';
+import { handleFor } from './chain/handles.js';
 import { inSession, nextOpen } from './chain/hours.js';
 import { recentPrices } from './chain/history.js';
 import { dropSession, injectedWallets, loadSession, openWallet, saveSession } from './chain/wallet.js';
@@ -38,7 +35,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('siroclimb:' + k, JSON.stringify(v)); } catch {} },
 };
 
-export const rules = { ladder: LADDER, stepEvery: STEP_SECONDS, duration: RUN_SECONDS, roundEntry: ROUND_ENTRY, prizeSplit: PRIZE_SPLIT };
+export const rules = { ladder: LADDER, stepEvery: STEP_SECONDS, duration: RUN_SECONDS };
 export { PACKS };
 
 // ─────────────────────────────────────────────────────────────── prices
@@ -339,7 +336,6 @@ async function resumeMyRun() {
 }
 
 export async function startRun({ mode = 'solo', assetId, side = 'long', stake, pack = false }) {
-  if (mode === 'round') throw new Error('use joinRound for rounds');
   if (!climber) await connect();
   const asset = marketIndex(assetId);
   if (!isOpen(feeds[asset])) throw new Error(`${MARKETS[asset].ticker} is closed right now, pick an open market`);
@@ -374,300 +370,12 @@ export async function cashOut(id) {
   const R = runs.get(id);
   if (R.result) return R.result;
   try {
-    if (R.mode === 'round') {
-      addProof(id, 'Cash out on the rollup', await climber.cashOutRound(R.roundId, R.asset), 'er');
-    } else {
-      addProof(id, 'Cash out on the rollup (commit + undelegate)', await climber.cashOut(R.asset), 'er');
-    }
+    addProof(id, 'Cash out on the rollup (commit + undelegate)', await climber.cashOut(R.asset), 'er');
   } catch (e) {
     if (!R.result) throw fail(e);
   }
   return whenEnded(id);
 }
-
-// ────────────────────────────────────────────────────────────── rounds
-// Round n opens at n * 80 s, takes joins for 20 s, runs 60 s. The round
-// account lives in slot n % 4; the autopilot below moves it along.
-const CYC = ROUND_CYCLE * 1000;
-const roundIdAt = (ms) => Math.floor(ms / CYC);
-const chainRounds = new Map(); // id -> decoded round + layer
-let lastSettled = null;
-async function readRound(id) {
-  const key = roundPda(id);
-  const b = await base.getAccountInfo(key);
-  if (!b) return null;
-  let r;
-  if (b.owner.toBase58() === DELEGATION) {
-    const e = await er.getAccountInfo(key);
-    if (!e) return null;
-    r = { ...decodeRound(e.data), layer: 'er' };
-  } else r = { ...decodeRound(b.data), layer: 'base' };
-  return r.id === id ? r : null;
-}
-/// Every slot, not just the current round's: a round left on the rollup by a
-/// closed tab (or a crash) still holds its slot until someone moves it along.
-async function readSlots() {
-  const keys = [0, 1, 2, 3].map(roundSlotPda);
-  const b = await base.getMultipleAccountsInfo(keys);
-  const delegated = keys.filter((k, i) => b[i] && b[i].owner.toBase58() === DELEGATION);
-  const e = delegated.length ? await er.getMultipleAccountsInfo(delegated) : [];
-  const out = [];
-  b.forEach((a, i) => {
-    if (!a) return;
-    if (a.owner.toBase58() === DELEGATION) {
-      const j = delegated.findIndex((k) => k.equals(keys[i]));
-      if (e[j]) out.push({ ...decodeRound(e[j].data), layer: 'er' });
-    } else out.push({ ...decodeRound(a.data), layer: 'base' });
-  });
-  return out;
-}
-async function pollRounds() {
-  const now = Date.now(), cur = roundIdAt(now);
-  try {
-    const all = await readSlots();
-    chainRounds.clear();
-    for (const r of all) {
-      if (r.status === ROUND.FREE) continue;
-      chainRounds.set(r.id, r);
-      if (r.status === ROUND.SETTLED && (!lastSettled || lastSettled.id < r.id)) lastSettled = r;
-    }
-  } catch (e) { log('round', e.message); }
-  roundTick(now);
-  autopilot(now).catch((e) => log('autopilot', e.message));
-}
-setInterval(pollRounds, 1000);
-
-const roundSubs = new Set();
-let lastAsset = MARKETS[0].id;
-function myIndex(r) { return climber && r ? r.entries.findIndex((e) => e.player.equals(climber.me)) : -1; }
-/// The round the lobby shows: the current one, or the one I am still playing.
-function shownRoundId(now = Date.now()) {
-  const cur = roundIdAt(now), prev = chainRounds.get(cur - 1);
-  if (prev && myIndex(prev) >= 0 && prev.status !== ROUND.SETTLED && now < (prev.endsAt + 8) * 1000) return cur - 1;
-  return cur;
-}
-function publicRound(id = shownRoundId()) {
-  const r = chainRounds.get(id);
-  const opensAt = id * CYC, startsAt = opensAt + ROUND_JOIN_SECONDS * 1000, endsAt = startsAt + RUN_SECONDS * 1000, now = Date.now();
-  // the VRF draw is pending (or about to be asked); a round nobody opened is not "drawing"
-  const unopened = !r && now >= startsAt - 4000;
-  const drawing = !unopened && (!r || r.status === ROUND.DRAWING || r.asset === NONE);
-  if (r && r.asset !== NONE) lastAsset = MARKETS[r.asset].id;
-  const mine = myIndex(r);
-  const joinable = r && r.status === ROUND.OPEN && r.layer === 'base' && now < startsAt - 1500;
-  return {
-    id, assetId: drawing || !r ? lastAsset : MARKETS[r.asset].id, drawing, opensAt, startsAt, endsAt,
-    status: now < startsAt ? 'open' : 'live', players: r ? r.players : 0, pot: r ? r.pot / ONE_USDC : 0, entry: ROUND_ENTRY,
-    joined: mine >= 0, late: mine < 0 && now >= startsAt - 1500, joinable: !!joinable || (!r && now < startsAt - 4000),
-    runId: mine >= 0 ? `round:${id}` : null, chainStatus: r ? r.status : null, unopened,
-    marketsOpen: openMask() !== 0,
-  };
-}
-let lastSecond = 0;
-function roundTick(now) {
-  const s = Math.floor(now / 1000);
-  if (s === lastSecond) return;
-  lastSecond = s;
-  const pr = publicRound();
-  if (pr.runId) ensureRoundRun(pr.id);
-  roundSubs.forEach((cb) => cb(pr));
-}
-export const currentRound = () => publicRound();
-export function onRound(cb) { roundSubs.add(cb); cb(publicRound()); return () => roundSubs.delete(cb); }
-
-function standingsOf(r, now = Date.now()) {
-  if (!r) return [];
-  const f = feeds[r.asset];
-  const t = r.liveTs ? Math.max(0, Math.min(RUN_SECONDS, now / 1000 - r.liveTs)) : 0;
-  const step = stepAt(t, LADDER.length - 1);
-  const rows = r.entries.map((e) => {
-    let v = e.value / ONE_USDC;
-    if (r.status === ROUND.LIVE && e.status === RUN.LIVE && isOpen(f)) v = moved(v, LADDER[step], e.side, BOOST[r.asset], r.lastPrice, f.raw);
-    return { name: e.name, pnlPct: (v / (r.entry / ONE_USDC) - 1) * 100, value: v, status: STATUS[e.status] || 'live', you: !!climber && e.player.equals(climber.me), index: e.index };
-  });
-  rows.sort((a, b) => b.value - a.value || a.index - b.index);
-  return rows.map((x, i) => ({ ...x, rank: i + 1 }));
-}
-export const roundStandings = () => standingsOf(chainRounds.get(shownRoundId()));
-
-export async function joinRound({ side = 'long' }) {
-  if (!climber) await connect();
-  const pr = publicRound(roundIdAt(Date.now()));
-  if (pr.joined) return pr;
-  if (Date.now() >= pr.startsAt - 1500) throw new Error('This round has started, join the next one');
-  if (bal < ROUND_ENTRY) throw new Error('Not enough test tokens');
-  try {
-    await ensureReady();
-    await ensureFuel();
-    const id = pr.id;
-    let r = await readRound(id);
-    if (!r) { await openRoundNow(id); }
-    for (let i = 0; i < 40; i++) { r = await readRound(id); if (r && r.status === ROUND.OPEN) break; if (i % 12 === 11) await openRoundNow(id).catch(() => {}); await sleep(400); }
-    if (!r || r.status !== ROUND.OPEN) throw new Error('The market draw is late, try the next round');
-    const sig = await climber.joinRound(id, side);
-    addProof(`round:${id}`, 'Join the round on Solana', sig, 'base');
-    setBal(bal - ROUND_ENTRY);
-    chainRounds.set(id, await readRound(id));
-    ensureRoundRun(id);
-    practice.maybeJoin(id);
-    return publicRound(id);
-  } catch (e) { throw fail(e); }
-}
-
-function ensureRoundRun(id) {
-  const rid = `round:${id}`;
-  if (runs.has(rid)) return runs.get(rid);
-  const r = chainRounds.get(id); if (!r) return null;
-  const i = myIndex(r); if (i < 0) return null;
-  const e = r.entries[i];
-  const R = { id: rid, mode: 'round', roundId: id, asset: r.asset, top: LADDER.length - 1, subs: new Set(), done: [], finals: [], result: null, final: null };
-  R.chain = { status: RUN.LIVE, value: e.value, side: e.side, stake: r.entry, startTs: r.liveTs || r.startsAt, entryPrice: r.entryPrice, lastPrice: r.lastPrice, maxStep: 0, endTs: 0 };
-  R.pub = pubRun(rid, 'round', { ...R.chain, asset: r.asset, top: R.top });
-  runs.set(rid, R);
-  watchRound(R);
-  return R;
-}
-async function watchRound(R) {
-  const id = R.roundId;
-  while (!R.final) {
-    await sleep(R.result ? 1000 : 250);
-    let r;
-    try { r = await readRound(id); } catch { continue; }
-    if (!r) continue;
-    chainRounds.set(id, r);
-    const i = myIndex(r); if (i < 0) continue;
-    const e = r.entries[i];
-    const live = r.status === ROUND.LIVE || r.status === ROUND.FINISHED || r.status === ROUND.SETTLED;
-    R.chain = { status: live ? e.status : RUN.LIVE, value: e.value, side: e.side, stake: r.entry, startTs: r.liveTs || r.startsAt, entryPrice: r.entryPrice, lastPrice: r.lastPrice, maxStep: e.maxStep, endTs: e.endTs };
-    if (r.liveTs) { R.pub.startedAt = r.liveTs * 1000; R.pub.entryPrice = toUsd(r.asset, r.entryPrice); }
-    if (!R.result && live && e.status !== RUN.LIVE && e.status !== RUN.STAKED) {
-      R.result = resultOf(R); R.result.duration = Math.max(0, Math.min(RUN_SECONDS, (e.endTs || r.endsAt) - (r.liveTs || r.startsAt)));
-      R.done.forEach((f) => f(R.result));
-    }
-    if (r.status === ROUND.SETTLED && R.result) {
-      const st = standingsOf(r), me = st.find((s) => s.you);
-      const k = r.winners.findIndex((w) => w === i);
-      R.final = { ...R.result, rank: me ? me.rank : r.players, of: r.players, prize: k >= 0 ? r.prizes[k] / ONE_USDC : 0, final: true };
-      R.finals.forEach((f) => f(R.final));
-      refreshBalance();
-      profile = await climber.profile().catch(() => profile);
-    }
-  }
-}
-export function whenRoundFinal(runId) {
-  const R = runs.get(runId);
-  return R.final ? Promise.resolve(R.final) : new Promise((res) => R.finals.push(res));
-}
-
-// Autopilot: every step of a round is permissionless, so any connected
-// browser moves it along (with a little jitter so a crowd does not collide).
-const inflight = new Set();
-async function step(key, fn) {
-  if (inflight.has(key)) return;
-  inflight.add(key);
-  try { await fn(); } catch (e) { log(key, friendlyError(e)); } finally { setTimeout(() => inflight.delete(key), 1500); }
-}
-const openMask = () => feeds.reduce((m, f, i) => (isOpen(f) ? m | (1 << i) : m), 0);
-async function openRoundNow(id) {
-  const mask = openMask();
-  if (!mask) throw new Error('Every market is closed right now');
-  return climber.openRound(id, mask);
-}
-const jitter = () => sleep(Math.random() * 1200);
-/// What the program accepts to reuse a slot (open_round): settled, or empty and past its bell.
-const slotReusable = (x, t) => x.status === ROUND.SETTLED || ((x.status === ROUND.OPEN || x.status === ROUND.DRAWING) && x.players === 0 && t > x.startsAt);
-async function autopilot(now) {
-  if (!climber || !climber.hasSession || sol < 0.002) return;
-  const cur = roundIdAt(now), t = now / 1000;
-  for (const id of new Set([...chainRounds.keys(), cur])) {
-    const r = chainRounds.get(id);
-    const startsAt = id * ROUND_CYCLE + ROUND_JOIN_SECONDS;
-    if (!r) {
-      // open the current round once its slot is free (only if someone is around to play: me)
-      const holder = [...chainRounds.values()].find((x) => x.slot === id % 4 && x.id !== id && !slotReusable(x, t));
-      if (id === cur && !holder && t < startsAt - 4 && wantsRound()) step(`open:${id}`, async () => { await jitter(); if (!(await readRound(id))) await openRoundNow(id); });
-      continue;
-    }
-    if (r.status === ROUND.DRAWING && t > r.settledTs + 7 && t < startsAt - 4) step(`redraw:${id}`, () => openRoundNow(id));
-    if (r.status === ROUND.OPEN && r.players > 0 && t >= startsAt) {
-      if (r.layer === 'base') step(`delegate:${id}`, async () => { await jitter(); const x = await readRound(id); if (x && x.layer === 'base' && x.status === ROUND.OPEN) await climber.delegateRound(id); });
-      else step(`live:${id}`, () => climber.goLive(id, r.asset));
-    }
-    if (r.layer === 'er' && (r.status === ROUND.FINISHED || (r.status === ROUND.LIVE && t >= r.liveTs + RUN_SECONDS + 2))) step(`finish:${id}`, () => climber.finishRound(id, r.asset));
-    if (r.layer === 'base' && r.status === ROUND.FINISHED) step(`settle:${id}`, async () => { await jitter(); await climber.settleRound(id); });
-    if (r.layer === 'base' && r.status === ROUND.SETTLED) {
-      const all = r.players ? (2 ** r.players - 1) : 0;
-      if ((r.recorded & all) !== all) step(`record:${id}`, async () => { await jitter(); await climber.recordRound(id); });
-    }
-  }
-}
-let roundInterest = 0;
-/// Rounds are opened by players who look at them (the Round tab), not by every open page.
-export function watchRounds(on = true) { roundInterest = on ? Date.now() : 0; }
-const wantsRound = () => roundInterest && Date.now() - roundInterest < 120000;
-
-// ────────────────────────────────────────────── practice bots (in browser)
-// When a round is nearly empty, up to three practice players join from this
-// browser: real keypairs with their own profile and test USDC, funded once
-// from the session key, that play their seat for real on the rollup.
-const practice = (() => {
-  const KEY = 'siroclimb:practice';
-  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]').map((s) => Keypair.fromSecretKey(Uint8Array.from(s))); } catch { return []; } };
-  let bots = null;
-  const all = () => {
-    if (!bots) {
-      bots = load();
-      while (bots.length < 3) bots.push(Keypair.generate());
-      localStorage.setItem(KEY, JSON.stringify(bots.map((k) => Array.from(k.secretKey))));
-    }
-    return bots;
-  };
-  const names = () => uniqueHandles(all().map((k) => k.publicKey.toBase58()));
-  async function readyBot(kp, name) {
-    const c = new Climber({ base, er, wallet: kp, log });
-    const need = [];
-    const lamports = await base.getBalance(kp.publicKey);
-    if (lamports < 8_000_000) await send(base, [SystemProgram.transfer({ fromPubkey: climber.session.keypair.publicKey, toPubkey: kp.publicKey, lamports: 12_000_000 })], [climber.session.keypair], { label: 'fund practice player' });
-    if (!(await base.getAccountInfo(profilePda(kp.publicKey)))) need.push(ix.initProfile(kp.publicKey, name));
-    if ((await c.usdc()) < ROUND_ENTRY) { need.unshift(createAtaIdempotent(kp.publicKey, kp.publicKey)); need.push(ix.faucet(kp.publicKey)); }
-    if (need.length) await send(base, need, [kp], { label: 'practice player' });
-    return c;
-  }
-  // cash out at a profit target, a stop or a time; some ride to the bell
-  function strategy() { const target = 1 + Math.random() * 6, stop = -3 - Math.random() * 12, until = 10 + Math.random() * 48; return { target, stop, until }; }
-  async function play(c, id, st) {
-    for (;;) {
-      await sleep(400);
-      const r = chainRounds.get(id); if (!r) continue;
-      if (r.status === ROUND.SETTLED || r.status === ROUND.FINISHED) return;
-      if (r.status !== ROUND.LIVE) continue;
-      const row = standingsOf(r).find((x) => r.entries[x.index].player.equals(c.me));
-      if (!row || row.status !== 'live') return;
-      const t = Date.now() / 1000 - r.liveTs;
-      if (row.pnlPct >= st.target || row.pnlPct <= st.stop || t >= st.until) { await c.cashOutRound(id, r.asset).catch(() => {}); return; }
-    }
-  }
-  async function maybeJoin(id) {
-    if (store.get('practice', true) === false) return;
-    const r = await readRound(id);
-    if (!r || r.players >= 3) return;
-    const list = all(), nm = names();
-    for (let i = 0; i < list.length && i < 3 - r.players + 1; i++) {
-      (async () => {
-        try {
-          await sleep(1500 + Math.random() * 6000);
-          const x = await readRound(id);
-          if (!x || x.status !== ROUND.OPEN || Date.now() / 1000 > x.startsAt - 3 || x.entries.some((e) => e.player.equals(list[i].publicKey))) return;
-          const c = await readyBot(list[i], nm[i]);
-          await c.joinRound(id, Math.random() > 0.5 ? 'long' : 'short');
-          play(c, id, strategy());
-        } catch (e) { log('practice', friendlyError(e)); }
-      })();
-    }
-  }
-  return { maybeJoin, names };
-})();
-export const practiceBots = (on) => store.set('practice', !!on);
 
 // ───────────────────────────────────────────────────────── leaderboards
 let boardCache = { at: 0, list: [] };
@@ -678,10 +386,6 @@ async function profiles() {
   return boardCache.list;
 }
 export async function leaderboard(scope = 'today') {
-  if (scope === 'round') {
-    const r = lastSettled; if (!r) return [];
-    return standingsOf(r).map((s, i) => ({ ...s, prize: r.winners.includes(s.index) ? r.prizes[r.winners.indexOf(s.index)] / ONE_USDC : 0 }));
-  }
   try {
     const today = Math.floor(Date.now() / 86400000);
     const me = account();
@@ -730,4 +434,4 @@ export async function openPack() {
 export async function shareCard() { return null; }
 
 // test hook (not part of the contract)
-export const _debug = { bust() {}, runs, chainRounds, climber: () => climber };
+export const _debug = { bust() {}, runs, climber: () => climber };
