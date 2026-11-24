@@ -63,3 +63,4 @@ Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlo
 |---|---|
 | 23 Nov 2026 | First deployment (crypto markets, used by the first probes) |
 | 23 Nov 2026 | Upgrade in place: RWA markets (xStocks via equity feeds, gold, GBP/USD relay), boosts retuned. Profiles written by the first probes keep asset indices of the old market list. |
+| 24 Nov 2026 | Upgrade in place: market hours on chain (`hours.rs`). `start_run` and `begin_run` refuse a market outside its New York sessions (`MarketClosed` 6026), round draws only among markets in session. Upgrade tx `Xr6HKAHjT71GYrcYqjLLFnACiX58Gic9JjszxopJ8KSLykruXS1pybrVzvxRKCvYffMu5FJhjFS1k1mWewxiZha` |
