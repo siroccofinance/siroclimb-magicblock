@@ -193,8 +193,7 @@ js/chain/    isomorphic client (browser + node): config, PDAs, IDL builders, dec
              sending, session keys, wallets, handles, the reserve's math, Climber
 js/api.js    the front's contract; js/api-chain.js serves it from the chain,
              js/api-mock.js is the old simulation (?mock)
-js/game.js   screens, HUD, price chart, leverage gauge, sound, scene driving, share
-js/coin-face.js  the coin's face maps, drawn from the vector Sirocco mark
+js/game.js   screens, HUD, leverage gauge, sound, scene driving, share
 api/         serverless routes: faucet, share link, share card picture and page
 ops/         setup, probes, battery, keeper, dev server, browser tests
 3d/, assets/ the Three.js scene sources, hero films, brand marks

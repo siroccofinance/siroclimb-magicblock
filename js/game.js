@@ -2,7 +2,7 @@
 // The 3D scene is the hero's: in the lobby the belt loops; on start it brakes, the coin's box climbs one level
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
-import { createEscalatorScene } from './sirocco-escalator-scene.js?v=7';
+import { createEscalatorScene } from './sirocco-escalator-scene.js?v=8';
 import { CARD, drawCard, loadLogo, toBlob } from './share-card.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -511,54 +511,26 @@ $('#share').onclick = async () => {
   if (card) showTip(copied, href);
 };
 
-// ── price chart: the last 45 s, scrolls smoothly; entry line, gradient fill, live dot
+// ── sparkline: last 60 s, scrolls smoothly, entry line while playing
 const spark = { el: $('#spark'), entry: 0, asset: assets[0].id };
 function drawSpark() {
   const c = spark.el; if (screen !== 'game' || !c.offsetWidth) return;
   const w = c.offsetWidth, h = c.offsetHeight, r = Math.min(devicePixelRatio || 1, 2);
-  if (c.width !== Math.round(w * r) || c.height !== Math.round(h * r)) { c.width = Math.round(w * r); c.height = Math.round(h * r); }
+  if (c.width !== w * r) { c.width = w * r; c.height = h * r; }
   const x = c.getContext('2d'); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, h);
   const span = 45, pts = api.history(spark.asset, span + 1); if (pts.length < 2) return;
-  const now = Date.now(), P = { l: 12, r: 16, t: 26, b: 12 }, cw = w - P.l - P.r, ch = h - P.t - P.b;
+  const now = Date.now();
   let lo = Infinity, hi = -Infinity; for (const p of pts) { lo = Math.min(lo, p.price); hi = Math.max(hi, p.price); }
   if (spark.entry) { lo = Math.min(lo, spark.entry); hi = Math.max(hi, spark.entry); }
-  const pad = (hi - lo) * 0.12 || hi * 0.0005; lo -= pad; hi += pad;
-  const X = ts => P.l + cw - ((now - ts) / 1000 / span) * cw, Y = p => P.t + ch - ((p - lo) / (hi - lo)) * ch;
-  const lp = pts[pts.length - 1], xe = P.l + cw, ye = Y(lp.price);
-  // header: what the chart is, and the live move against the entry
-  x.font = '500 11px Inter, -apple-system, sans-serif'; x.textBaseline = 'alphabetic';
-  x.fillStyle = 'rgba(255,255,255,.6)'; x.fillText('LAST 45 S', P.l, 17);
-  // faint guides
-  x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 1;
-  for (let i = 0; i <= 2; i++) { const y = Math.round(P.t + (ch * i) / 2) + 0.5; x.beginPath(); x.moveTo(P.l, y); x.lineTo(xe, y); x.stroke(); }
-  // the line, smoothed through midpoints
-  const path = new Path2D(); let x0 = Math.max(P.l, X(pts[0].ts)), px = x0, py = Y(pts[0].price);
-  path.moveTo(px, py);
-  for (let i = 1; i < pts.length; i++) { const nx = Math.max(P.l, X(pts[i].ts)), ny = Y(pts[i].price); path.quadraticCurveTo(px, py, (px + nx) / 2, (py + ny) / 2); px = nx; py = ny; }
-  path.lineTo(xe, ye);
-  const area = new Path2D(path); area.lineTo(xe, P.t + ch); area.lineTo(x0, P.t + ch); area.closePath();
-  const g = x.createLinearGradient(0, P.t, 0, P.t + ch); g.addColorStop(0, 'rgba(255,236,200,.30)'); g.addColorStop(1, 'rgba(255,236,200,0)');
-  x.fillStyle = g; x.fill(area);
-  if (spark.entry) {
-    const y = Math.round(Y(spark.entry)) + 0.5;
-    x.setLineDash([4, 4]); x.strokeStyle = 'rgba(242,201,76,.9)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(P.l, y); x.lineTo(xe, y); x.stroke(); x.setLineDash([]);
-    // the entry goes in the header (a label on the line would sit under the price)
-    x.font = '500 11px Inter, -apple-system, sans-serif'; const lx = P.l + x.measureText('LAST 45 S').width + 16;
-    x.setLineDash([3, 3]); x.beginPath(); x.moveTo(lx, 13.5); x.lineTo(lx + 14, 13.5); x.stroke(); x.setLineDash([]);
-    x.fillStyle = '#f2c94c'; x.font = '600 11px Inter, -apple-system, sans-serif'; x.fillText('Entry ' + price(spark.entry), lx + 20, 17);
-  }
-  x.save(); x.shadowColor = 'rgba(255,240,210,.55)'; x.shadowBlur = 8;
-  x.lineWidth = 2; x.strokeStyle = '#fff'; x.lineJoin = 'round'; x.lineCap = 'round'; x.stroke(path); x.restore();
-  // live dot with a breathing halo
-  const pulse = 0.5 + 0.5 * Math.sin(now / 260);
-  x.fillStyle = `rgba(255,255,255,${0.18 + 0.12 * pulse})`; x.beginPath(); x.arc(xe, ye, 7 + 3 * pulse, 0, Math.PI * 2); x.fill();
-  x.fillStyle = '#fff'; x.beginPath(); x.arc(xe, ye, 3.6, 0, Math.PI * 2); x.fill();
-  // move since entry, top right
-  if (spark.entry) {
-    const ch2 = (lp.price / spark.entry - 1) * 100, t = pct(ch2);
-    x.font = '600 12px Inter, -apple-system, sans-serif'; x.textAlign = 'right';
-    x.fillStyle = ch2 >= 0 ? '#bff5cf' : '#ffd0c4'; x.fillText(t, xe, 17); x.textAlign = 'left';
-  }
+  const pad = (hi - lo) * 0.15 || hi * 0.0005; lo -= pad; hi += pad;
+  const X = ts => w - ((now - ts) / 1000 / span) * w, Y = p => h - ((p - lo) / (hi - lo)) * h;
+  x.beginPath(); pts.forEach((p, i) => (i ? x.lineTo(X(p.ts), Y(p.price)) : x.moveTo(X(p.ts), Y(p.price))));
+  const lp = pts[pts.length - 1]; x.lineTo(w, Y(lp.price));
+  x.lineWidth = 1.6; x.strokeStyle = '#fff'; x.lineJoin = 'round'; x.stroke();
+  x.lineTo(w, h); x.lineTo(X(pts[0].ts), h); x.closePath();
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fill();
+  if (spark.entry) { x.setLineDash([3, 4]); x.strokeStyle = 'rgba(242,201,76,.95)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(0, Y(spark.entry)); x.lineTo(w, Y(spark.entry)); x.stroke(); x.setLineDash([]); }
+  x.fillStyle = '#fff'; x.beginPath(); x.arc(w - 2.5, Y(lp.price), 2.5, 0, Math.PI * 2); x.fill();
 }
 
 // ── sheets
