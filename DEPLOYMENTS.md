@@ -45,6 +45,10 @@ Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlo
 | VRF program / base queue | `Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz` / `Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh` |
 | Price oracle | `PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd` |
 
+## Battery players
+
+The 24 battery players (realistic handles: saffron301, dune.sol, ghibli_hunter, gecko_fx, bora.sol, wolfx, …) are keypairs under `~/.config/siroclimb/battery/`; their profiles, climbs and round seats are on chain and fill the public leaderboard. Latest run: 400 / 400 checks on the upgraded program ([BATTERY.md](BATTERY.md)).
+
 ## Integration proof (explorer)
 
 - Program: https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet
