@@ -16,6 +16,7 @@
     "test:smoke": "node ops/test/smoke.mjs",
     "ci": "bash ops/ci-local.sh",
     "test:hours": "node --no-deprecation ops/test/hours-litesvm.mjs",
+    "test:reserve": "node --no-deprecation ops/test/reserve-litesvm.mjs",
     "chain:deploy": "solana program deploy -u devnet --keypair $HOME/.config/siroclimb/solana/deployer.json --upgrade-authority $HOME/.config/siroclimb/solana/deployer.json --program-id $HOME/.config/siroclimb/solana/program.json chain/target/deploy/siroclimb.so --with-compute-unit-price 10000",
     "mirrors": "bash ops/mirrors.sh"
   },
