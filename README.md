@@ -146,11 +146,11 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 | Step | Median |
 |---|---|
 | stake + delegate (Solana) | 1.0 s |
-| delegation visible on the rollup | 20 ms |
-| begin at the oracle price + schedule the crank (rollup) | 0.37 s |
-| cash out + commit/undelegate (rollup) | 0.34 s |
+| delegation visible on the rollup | 17 ms |
+| begin at the oracle price + schedule the crank (rollup) | 0.31 s |
+| cash out + commit/undelegate (rollup) | 0.30 s |
 | back on Solana after the cash out | 0.9 s |
-| settle (Solana) | 1.05 s |
+| settle (Solana) | 1.03 s |
 | round market VRF callback / pack VRF callback | 0.6 to 0.7 s / 1.1 s |
 
 ## Known gaps
