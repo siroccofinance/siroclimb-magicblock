@@ -53,6 +53,8 @@ Outside its sessions a market shows **closed** in the lobby and rounds do not dr
 
 Why a relay for GBP/USD: MagicBlock's rollups carry no FX feed (checked on devnet-eu, -as and -us), Pyth's devnet push account was 16 minutes stale, and our Pyth key is not entitled to FX. The relay is honest about its trust: one named key, prices only move forward, and swapping in signed Pyth Lazer FX updates is a one-function change once entitled.
 
+The charts open full: the last 90 seconds of each market are read back from its price account's update transactions on the rollup (keyless, same source as the live price; `js/chain/history.js`).
+
 Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies, tuned from the feeds' per-second volatility (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GBP/USD 400). A boost is a game rule, stated in the rules sheet.
 
 The xStocks have no devnet mints, so devnet mirrors were created with the same name, symbol and decimals (Token-2022, 8 decimals); see [DEPLOYMENTS.md](DEPLOYMENTS.md).
@@ -155,7 +157,6 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 - **Market hours on chain.** The program enforces price freshness, not trading sessions: someone calling it directly could start a climb on a closed market's frozen price. The front, keeper and battery never do. Enforcing Pyth's schedules on chain is the next step.
 - **GBP/USD trust.** The relay is one named key fed from Kraken. MagicBlock has no FX feed on its rollups and our Pyth key is not entitled to FX; with an FX entitlement the relay would post signed Pyth Lazer updates instead.
 - **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. Keeping a player's run account delegated between climbs would remove it; not done for the hackathon.
-- **History.** The lobby's sparkline and 60 s change start from the moment the page opens (Pyth's history API needs an entitlement we lack).
 - **Not hosted.** The repo is Vercel-ready (static site + two functions) but not deployed.
 
 ## Repository
