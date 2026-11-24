@@ -111,7 +111,7 @@ if (FLOW === 'menu') {
   await pg.click('#share');
   const tab = await tabP;
   let link = null;
-  await until(async () => { const m = /\/s\/([\w-]+\.[\w-]+)/.exec(decodeURIComponent(decodeURIComponent(tab.url()))); if (m) link = m[0]; return !!m; }, 60000, 'share link');
+  await until(async () => { const dec = (u) => { try { return decodeURIComponent(u); } catch { return u; } }; const m = /\/s\/([\w-]+\.[\w-]+)/.exec(dec(dec(tab.url()))); if (m) link = m[0]; return !!m; }, 60000, 'share link');
   const page = await (await fetch(URL.replace(/\/$/, '') + link)).text();
   const meta = (k) => (new RegExp(`(?:property|name)="${k}" content="([^"]+)"`).exec(page) || [])[1];
   const img = await fetch(meta('og:image').replace(/^https:\/\/[^/]+/, URL.replace(/\/$/, '')));
