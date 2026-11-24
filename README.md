@@ -1,8 +1,8 @@
 # Siroclimb on MagicBlock
 
-**A one-minute leverage climb on tokenized stocks, gold and the pound, played on an Ephemeral Rollup and settled on Solana.**
+**A one-minute leverage climb on tokenized stocks and gold, played on an Ephemeral Rollup and settled on Solana.**
 
-Pick a market (TSLAx, NVDAx, AAPLx, gold or GBP/USD), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Solo climbs are played against the house; timed rounds put everyone on the same market for the same minute and split the pot 50 / 30 / 20.
+Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Solo climbs are played against the house; timed rounds put everyone on the same market for the same minute and split the pot 50 / 30 / 20.
 
 Built for MagicBlock's Solana Blitz v10 (Entertainment Finance). Everything runs on **Solana devnet + MagicBlock's devnet Ephemeral Rollup** with live Pyth Lazer prices pushed into the rollup by MagicBlock.
 
@@ -37,7 +37,7 @@ A round is the same with one account for the whole field: `open_round` asks Magi
 |---|---|---|
 | **Ephemeral Rollups** | `delegate_run`, `delegate_round`, `cash_out`, `finish_round` | The `Run` (solo) and `Round` accounts are delegated for the minute of play. Price ticks, leverage steps, the bust and every cash out run on the rollup at zero fee; the cash out itself commits and undelegates. Money never leaves Solana. |
 | **Cranks** (`ScheduleTask`) | `begin_run` → `tick_run`, `go_live` → `tick_round` | The climb ticks itself every 500 ms on the rollup (about 120 ticks per climb). No off-chain ticking loop. Ticks are permissionless and idempotent. |
-| **Real-time price oracle** | `begin_run`, `tick_*`, `cash_out*` | MagicBlock's Pyth Lazer feeds on the rollup (`PriCems5…`): TSLA 1435, NVDA 1314, AAPL 922 (the xStocks), XAU/USD 346. Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
+| **Real-time price oracle** | `begin_run`, `tick_*`, `cash_out*` | MagicBlock's Pyth Lazer feeds on the rollup (`PriCems5…`): TSLA 1435, NVDA 1314, AAPL 922, GME 1160 (the xStocks), XAU/USD 346. Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
 | **VRF** | `open_round` → `draw_round_market`, `open_pack` → `apply_pack` | The market of every round and the tier of every leverage pack are drawn by MagicBlock's VRF; callbacks are only accepted from the VRF program's scoped identity. |
 | **Session keys** (`session-keys`, `SessionTokenV2`) | `start_run`, `join_round`, `open_pack`, every rollup action | The wallet approves once. A browser-held session key, authorised by a `SessionTokenV2` and approved as SPL spender of the wallet's test USDC, signs every stake, cash out, join and pack with no wallet prompt (wallets cannot sign rollup transactions anyway). |
 
@@ -45,17 +45,16 @@ A round is the same with one account for the whole field: `open_round` asks Magi
 
 | Market | Price | When it moves |
 |---|---|---|
-| TSLAx, NVDAx, AAPLx | Pyth Lazer US equity feeds on the rollup (the xStocks track their share 1:1) | Sun 20:00 to Fri 20:00 New York: pre-market, regular, post-market and overnight sessions |
+| TSLAx, NVDAx, AAPLx, GMEx | Pyth Lazer US equity feeds on the rollup (the xStocks track their share 1:1) | Sun 20:00 to Fri 20:00 New York: pre-market, regular, post-market and overnight sessions |
 | Gold (XAU/USD) | Pyth Lazer metal feed on the rollup | Sun 18:00 to Fri 17:00 New York, with a daily hour off |
-| GBP/USD | The program's `RelayFeed` account on the rollup | Pushed every second by the relay key (`/api/relay`, keeper) from Kraken's public GBP/USD book, which trades every day |
 
-Outside its sessions a market shows **closed** in the lobby and rounds do not draw it. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`), and round draws only among markets in session. It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends only GBP/USD plays.
+Outside its sessions a market shows **closed** in the lobby and rounds do not draw it. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`), and round draws only among markets in session. It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends every market is closed.
 
-Why a relay for GBP/USD: MagicBlock's rollups carry no FX feed (checked on devnet-eu, -as and -us), Pyth's devnet push account was 16 minutes stale, and our Pyth key is not entitled to FX. The relay is honest about its trust: one named key, prices only move forward, and swapping in signed Pyth Lazer FX updates is a one-function change once entitled.
+Why GMEx: Amazon, Meta, Microsoft and Alphabet were the first picks for a fourth stock, but MagicBlock pushes none of them into its rollups (checked on devnet-eu, -us, -as and the mainnet rollups on 24 Nov 2026). The only other US equity feed on devnet-eu is GameStop (Pyth Lazer 1160, fresh every 50 to 200 ms, same sessions as the other stocks), and GameStop trades on Solana as the GMEx xStock, so every market is read the same way: a MagicBlock price account, no relay, no trusted key.
 
 The charts open full: the last 90 seconds of each market are read back from its price account's update transactions on the rollup (keyless, same source as the live price; `js/chain/history.js`).
 
-Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies, tuned from the feeds' per-second volatility (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GBP/USD 400). A boost is a game rule, stated in the rules sheet.
+Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies, tuned from the feeds' per-second volatility (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GMEx 55; GameStop ticks a cent at a time and moves about 0.7 bp a second, so 55 gives it the same boosted swing as AAPLx and NVDAx). A boost is a game rule, stated in the rules sheet.
 
 The xStocks have no devnet mints, so devnet mirrors were created with the same name, symbol and decimals (Token-2022, 8 decimals); see [DEPLOYMENTS.md](DEPLOYMENTS.md).
 
@@ -68,7 +67,6 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | Session authorisation (`SessionTokenV2`) and spending allowance | ✓ | | |
 | Live climbs and rounds: entry price, ticks, leverage, bust, cash out | | ✓ | |
 | Prices (Pyth Lazer pushed by MagicBlock) | | ✓ | |
-| GBP/USD relay account | | ✓ | relay key (serverless route) |
 | Profiles: handle, record, bests, last 8 climbs, pack | ✓ | | |
 | VRF draws: round market, leverage packs | ✓ | | |
 | Leaderboards (today, all time, last round) | read | | front |
@@ -77,7 +75,7 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 
 **Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
 
-**Serverless.** Nothing has to run on our side for the game to work: every step of a climb or a round is permissionless, and the page itself pushes each one along (autopilot). When a round is nearly empty, up to three practice players join from your own browser: real keypairs with their own profile and test USDC, funded once by your session key, that play their seat on the rollup. The optional keeper (`npm run keeper`) only makes the lobby feel alive when nobody is online. The two serverless routes are a devnet SOL faucet for new wallets and the GBP/USD relay.
+**Serverless.** Nothing has to run on our side for the game to work: every step of a climb or a round is permissionless, and the page itself pushes each one along (autopilot). When a round is nearly empty, up to three practice players join from your own browser: real keypairs with their own profile and test USDC, funded once by your session key, that play their seat on the rollup. The optional keeper (`npm run keeper`) only makes the lobby feel alive when nobody is online. The one serverless route is a devnet SOL faucet for new wallets.
 
 ## Leverage packs
 
@@ -96,21 +94,20 @@ Every account, mint and explorer link: [DEPLOYMENTS.md](DEPLOYMENTS.md). Each cl
 
 ```bash
 npm install
-npm run dev          # http://127.0.0.1:3042: the site + /api/relay + /api/faucet
+npm run dev          # http://127.0.0.1:3042: the site + /api/faucet
 ```
 
 Open the page, **Start playing**, pick an open market and **Start climbing**. Connect Phantom / Solflare / Backpack on devnet, or the built-in **burner wallet** (devnet SOL comes from the site's faucet). The first climb asks for one approval; every later action is instant. `?mock` runs the old in-browser simulation, no chain. `#play` opens the lobby directly.
 
-### Hosting (Vercel-ready, not deployed)
+### Hosting (Vercel, live at https://siroclimb.sirocco.finance)
 
-The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); `api/relay.js` and `api/faucet.js` are Vercel Node functions. Import the repo in Vercel with no framework preset and set two server-side environment variables:
+The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); `api/faucet.js` is a Vercel Node function. Import the repo in Vercel with no framework preset and set one server-side environment variable:
 
 | Variable | What |
 |---|---|
-| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/solana/relayer.json`), named in the relay account |
 | `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/solana/faucet.json`) |
 
-Without them the game still works: GBP/USD shows closed and new wallets need devnet SOL from faucet.solana.com.
+Without it the game still works: new wallets need devnet SOL from faucet.solana.com.
 
 ### Ops scripts (keys in `~/.config/siroclimb/solana/`, never in the repo)
 
@@ -120,13 +117,13 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 |---|---|
 | `npm run chain:build` | `anchor build` in `chain/` |
 | `npm run chain:test` | Rust unit tests of the game rules |
-| `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll, round slots, relay |
-| `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GBP/USD) |
+| `npm run setup` | one-time, idempotent: mint, vault, config, house bankroll, round slots |
+| `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GMEx) |
 | `npm run battery -- 24 2 2` | on-chain battery: players, rounds, solo waves ([BATTERY.md](BATTERY.md)) |
 | `npm run test:ui` | the real front in headless Chrome (`FLOW=round`, `pack`, `menu`; `FRESH=1` from an empty burner) |
 | `npm run ci` | every CI step, locally |
 | `npm run test:hours` | the on-chain market hours in LiteSVM (after `npm run chain:build`) |
-| `npm run keeper` | optional keeper: relay, rounds, house players, sweeper |
+| `npm run keeper` | optional keeper: rounds, house players, sweeper |
 
 ## Tests and results
 
@@ -160,9 +157,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 
 ## Known gaps
 
-- **GBP/USD trust.** The relay is one named key fed from Kraken. MagicBlock has no FX feed on its rollups and our Pyth key is not entitled to FX; with an FX entitlement the relay would post signed Pyth Lazer updates instead.
 - **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. The front funds the session key in proportion to the wallet (up to about 60 climbs) and shows the fuel left in the wallet menu; keeping a player's run delegated between climbs would remove the cost and is left for after the hackathon.
-- **Not hosted.** The repo is Vercel-ready (static site + two functions) but not deployed.
 
 ## Repository
 
@@ -172,11 +167,11 @@ chain/programs/siroclimb/src/
   game.rs    climb, round, profile and pack rules, unit tests
   token.rs   minimal SPL token helpers (no anchor-spl: half the binary, half the rent)
 js/chain/    isomorphic client (browser + node): config, PDAs, IDL builders, decoders,
-             sending, session keys, wallets, handles, the GBP/USD relay, Climber
+             sending, session keys, wallets, handles, Climber
 js/api.js    the front's contract; js/api-chain.js serves it from the chain,
              js/api-mock.js is the old simulation (?mock)
 js/game.js   screens, HUD, leverage gauge, sound, scene driving
-api/         serverless routes: relay, faucet
+api/         serverless route: faucet
 ops/         setup, probes, battery, keeper, dev server, browser tests
 3d/, assets/ the Three.js scene sources, hero films, brand marks
 ```
