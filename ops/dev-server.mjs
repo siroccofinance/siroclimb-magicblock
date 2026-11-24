@@ -1,6 +1,6 @@
-// Local dev server: the static site plus the two serverless routes, on one
-// port (default 3042). Keys for the routes come from ~/.config/siroclimb/
-// (relayer.json, faucet.json) unless already in the environment.
+// Local dev server: the static site plus the serverless faucet route, on one
+// port (default 3042). The faucet key comes from ~/.config/siroclimb/
+// (faucet.json) unless already in the environment.
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -9,11 +9,11 @@ import { KEY_DIR } from './lib/env.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3042);
-for (const [env, file] of [['RELAYER_SECRET_KEY', 'relayer.json'], ['FAUCET_SECRET_KEY', 'faucet.json']]) {
+for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json']]) {
   const f = path.join(KEY_DIR, file);
   if (!process.env[env] && fs.existsSync(f)) process.env[env] = fs.readFileSync(f, 'utf8').trim();
 }
-const routes = { '/api/relay': (await import('../api/relay.js')).default, '/api/faucet': (await import('../api/faucet.js')).default };
+const routes = { '/api/faucet': (await import('../api/faucet.js')).default };
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };
 
