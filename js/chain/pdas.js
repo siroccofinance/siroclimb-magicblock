@@ -13,7 +13,6 @@ export const profilePda = (user) => pda([s('profile'), user.toBuffer()]);
 export const runPda = (player) => pda([s('run'), player.toBuffer()]);
 export const roundSlot = (id) => Number(BigInt(id) % BigInt(ROUND_SLOTS));
 export const roundPda = (id) => pda([s('round'), Buffer.from([roundSlot(id)])]);
-export const relayPda = (market) => pda([s('relay'), Buffer.from([market])]);
 export const roundSlotPda = (slot) => pda([s('round'), Buffer.from([slot])]);
 
 /// The identity PDA this program signs VRF requests with.

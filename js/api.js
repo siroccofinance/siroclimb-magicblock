@@ -10,7 +10,7 @@
 //   init()                                   → Promise<{ user: { name }, balance }>
 //   connect(walletId?) / account() / disconnect() → wallet + session key: { address } | address | null
 //   wallets()                                → [{ id, name }]     injected wallets, plus a devnet burner
-//   listAssets()                             → Asset[]            { id, name, ticker, kind: 'stock' | 'metal' | 'fx', hours }
+//   listAssets()                             → Asset[]            { id, name, ticker, kind: 'stock' | 'metal', hours }
 //   marketOpen(assetId)                      → boolean            false outside the market's trading hours
 //   marketOpensAt(assetId)                  → ms | null          next session start of a closed market
 //   subscribePrice(assetId, cb)              → unsubscribe()      cb({ price, ts })

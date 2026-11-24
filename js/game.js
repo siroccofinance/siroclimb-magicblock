@@ -23,7 +23,7 @@ const money = v => nf.format(v);
 const sgn = v => (v < -0.0049 ? MINUS : '+');
 const signed = v => sgn(v) + nf.format(Math.abs(v));
 const pct = v => sgn(v) + Math.abs(v).toFixed(2) + '%';
-const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));   // FX needs 4 decimals
+const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));
 const levTxt = x => (x % 1 ? x.toFixed(1) : String(x)) + 'x';
 const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
@@ -193,7 +193,7 @@ faucetBtn.onclick = async () => {
 
 // ── lobby
 const marketsEl = $('#markets');
-const KIND = { stock: 'Stock', metal: 'Gold', fx: 'FX', crypto: 'Crypto' };
+const KIND = { stock: 'Stock', metal: 'Gold' };
 const chip = {};
 for (const a of assets) {
   const b = document.createElement('button');
@@ -276,7 +276,7 @@ function renderGo() {
   }
   const r = round, pot = `${r.players} ${r.players === 1 ? 'player' : 'players'}, pot ${money(r.pot)} tUSDC`;
   if (r.joined) { go.disabled = true; go.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}`; meta.textContent = `You are in. ${pot}`; }
-  else if (r.marketsOpen === false && !r.joined) { go.disabled = true; go.textContent = 'Markets closed'; meta.textContent = 'Stocks, gold and the pound are all outside their trading hours.'; }
+  else if (r.marketsOpen === false && !r.joined) { go.disabled = true; go.textContent = 'Markets closed'; meta.textContent = 'Stocks and gold are all outside their trading hours.'; }
   else if (r.status === 'open' && r.drawing && r.players) { go.disabled = true; go.textContent = 'Drawing the market…'; meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`; }
   else if (r.status === 'open' && !r.late && r.joinable !== false) {
     go.disabled = busy; go.textContent = busy ? 'Joining…' : api.account() && bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;

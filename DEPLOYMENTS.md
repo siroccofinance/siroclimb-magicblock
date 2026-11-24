@@ -2,7 +2,7 @@
 
 ## Keys
 
-Everything below was created and is paid for by Siroclimb's own deployer, `DnSHPS8XgyNhTo8Yj5gVnA2ouXTe6t4c83W3AbcnLs7w` (`~/.config/siroclimb/solana/deployer.json`): it is the program's upgrade authority, the config admin, the xStock mirrors' mint authority, and the only key that funds the others (relay key, site faucet, keeper, house players, battery players, all under `~/.config/siroclimb/solana/`). The scripts refuse the Solana CLI default wallet.
+Everything below was created and is paid for by Siroclimb's own deployer, `DnSHPS8XgyNhTo8Yj5gVnA2ouXTe6t4c83W3AbcnLs7w` (`~/.config/siroclimb/solana/deployer.json`): it is the program's upgrade authority, the config admin, the xStock mirrors' mint authority, and the only key that funds the others (site faucet, keeper, house players, battery players, all under `~/.config/siroclimb/solana/`). The scripts refuse the Solana CLI default wallet.
 
 ## Program and accounts
 
@@ -16,8 +16,6 @@ Everything below was created and is paid for by Siroclimb's own deployer, `DnSHP
 | Round slot 1 | [`FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy`](https://explorer.solana.com/address/FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy?cluster=devnet) |
 | Round slot 2 | [`3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv`](https://explorer.solana.com/address/3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv?cluster=devnet) |
 | Round slot 3 | [`BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4`](https://explorer.solana.com/address/BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4?cluster=devnet) |
-| GBP/USD relay `["relay", 4]` (delegated, lives on the rollup) | [`2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr`](https://explorer.solana.com/address/2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app) |
-| Relay key | `DzeEB8bDswhwwWiwGDkvQywnX3V97B7FPJUQfnwRUAvK` |
 | VRF request identity `["identity"]` | `CeEPZEQLFiVQJ6RyKjTr6j4JAiJGkqUy3xFBNwVHh94J` |
 | Site faucet key (devnet SOL for new wallets) | `A6koh5fTipjQLyVzJWB4fFwcivBF1G3w4e9KvmxfwTHH` |
 
@@ -33,7 +31,7 @@ While a climb or a round is live its account reads as owned by the delegation pr
 | NVDAx | `3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC` | Pyth Lazer 1314 `Equity.US.NVDA/USD`, expo -5 | [`4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ`](https://explorer.solana.com/address/4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ?cluster=devnet) NVIDIA xStock, 8 dec. | `Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh` |
 | AAPLx | `B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1` | Pyth Lazer 922 `Equity.US.AAPL/USD`, expo -5 | [`yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb`](https://explorer.solana.com/address/yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb?cluster=devnet) Apple xStock, 8 dec. | `XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp` |
 | Gold | `9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn` | Pyth Lazer 346 `Metal.XAU/USD`, expo -3 | | |
-| GBP/USD | `2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr` | program relay, Kraken GBP/USD mid, expo -5 | | |
+| GMEx | `BjxWySYsKPbDfsNxLRPocTEB55RRPbAuWqMqUJHVgqpE` | Pyth Lazer 1160 `Equity.US.GME/USD`, expo -5 | [`FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy`](https://explorer.solana.com/address/FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy?cluster=devnet) GameStop xStock, 8 dec. | `Xsf9mBktVB9BSU5kf4nHxPq5hCBJ2j2ui3ecFGxPRGc` |
 
 Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlock's oracle program `PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd`. No devnet mint of the Backed xStocks exists (the mainnet addresses hold no mint on devnet), so the mirrors above copy their name, symbol and decimals (Token-2022 with the metadata extension, mint authority = Siroclimb's deployer; `npm run mirrors`).
 
@@ -61,6 +59,7 @@ The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan15
   - begin on the rollup at the Pyth Lazer price, crank scheduled: https://explorer.solana.com/tx/GGSetUBgPiysTSUBC1Q2w7tcJ8oxPGivBw9aUXLnQNtjzEa5s3R5EjMmRShKab3upqVur54nZLVWrknpvf6Spb5?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
   - cash out + commit/undelegate on the rollup: https://explorer.solana.com/tx/2zMfxYLofWHwZuNERDV8XuMpK4MCErAG83vtEX4CnS43dwoeZiD445GggpMYEU1qbHiPEVhMTgeXWC3ie4SwzfaL?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app
   - settle on Solana: https://explorer.solana.com/tx/2AnLz3Wj1ZFEkvDQoNvAr5jkhk6m8uKCNT4NvSRKd672xVQtfpsy4YNY5oYV3YU2cUHeBuctYVRAnuVFZkZHxEDW?cluster=devnet
+- A GMEx climb after the GMEx upgrade (probe, 24 Nov 2026): stake + delegate [`48vnfqaK…`](https://explorer.solana.com/tx/48vnfqaKC1MPxKyPBcfqVKiBCbFMs7NGfWGTPdhhMsh9Fzd6mDJrSn1s18EwMbbySSqrer5taBzqmzVgeAJ4KxXc?cluster=devnet), begin at the GME price [`2wBFn2eH…`](https://explorer.solana.com/tx/2wBFn2eHi19WkWMEgbW7vZaGenNmohxbr61prGfoE7vbVwgBqPEZARacfagw8Ywj4b27ndaiQYZk7vQJ2hdzLnmy?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app), cash out [`3oeDYyZh…`](https://explorer.solana.com/tx/3oeDYyZh3Lw5pimq2ZRPn9GDGxMAX7XTiAP4BXZ3wDL6YiYnEMH7XiMXhbMQ6UrxDZsvVv58sNe8PpD4R97acBBR?cluster=custom&customUrl=https%3A%2F%2Fdevnet-eu.magicblock.app), settle [`t6g8B644…`](https://explorer.solana.com/tx/t6g8B644sPxmwj5j3QwJTbfiAECCy3zwZm7qALFDGPtW7Z85HZF2ZJTXLtGxCRvrpVGMWJZkhRkCzd6S6AqwtY1?cluster=devnet)
 - Every climb played in the front lists its own explorer links on the result screen.
 
 ## History
@@ -71,3 +70,4 @@ The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan15
 | 23 Nov 2026 | Upgrade in place: RWA markets (xStocks via equity feeds, gold, GBP/USD relay), boosts retuned. Profiles written by the first probes keep asset indices of the old market list. |
 | 24 Nov 2026 | Upgrade in place: market hours on chain (`hours.rs`). `start_run` and `begin_run` refuse a market outside its New York sessions (`MarketClosed` 6026), round draws only among markets in session. Upgrade tx `Xr6HKAHjT71GYrcYqjLLFnACiX58Gic9JjszxopJ8KSLykruXS1pybrVzvxRKCvYffMu5FJhjFS1k1mWewxiZha` |
 | 24 Nov 2026 | **Fresh deployment from Siroclimb's own deployer** `DnSHPS8X…`: new program id `BS6874Pq…` (tx `3LL2Yxtr…`), new config, mint, vault, slots, relay, mirrors and keys. The previous program `29sucV8a…` (deployed with another project's wallet) was closed and its rent, and the leftover SOL of its faucet, relay, keeper, house and battery keys, returned to that wallet; its keys are retired. |
+| 24 Nov 2026 | Upgrade in place: **GMEx (GameStop xStock) replaces GBP/USD** at market index 4, read from MagicBlock's Pyth Lazer GME feed (1160) like the other stocks, US equity sessions on chain, boost 55. The relay instructions and `RelayFeed` account type are gone; the old relay account `2k53rB3b…` stays delegated on the rollup, unused. Config, mint, vault, round slots and profiles unchanged (profiles that recorded a GBP/USD climb now show it as GMEx). Upgrade tx [`5zWs3RLT…`](https://explorer.solana.com/tx/5zWs3RLT6HkkJnmeUs99BagQqisvDYEhoQRN4Xf41zr1GfJdXn1jXmsTHsJiU3Ke8MfmndpdvrCQbh1iv7PCbvfs?cluster=devnet) |

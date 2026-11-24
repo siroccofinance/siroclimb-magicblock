@@ -103,10 +103,10 @@ ok('the climb is live', runStatus() === 2, `status ${runStatus()}`);
 
 // the VRF program only has to exist for account checks: the draw is refused before any call to it
 svm.addProgramFromFile(VRF_PROGRAM_ID, new URL('../../chain/target/deploy/siroclimb.so', import.meta.url).pathname);
-// rounds: on a Saturday only the GBP/USD relay is in session, so a draw over the four Pyth markets has nothing to pick
+// rounds: on a Saturday every market is closed, so a draw has nothing to pick
 at(utc('2026-11-28T15:00:00Z'));
 const id = Math.floor(utc('2026-11-28T15:00:20Z') / 80);
-const rr = send([ix.openRound(player.publicKey, id, 0b01111)], [player]);
+const rr = send([ix.openRound(player.publicKey, id, 0b11111)], [player]);
 ok('Saturday: a round draw over closed markets is refused (BadAsset 6007)', !rr.ok && rr.code === 6007, `code ${rr.code}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);

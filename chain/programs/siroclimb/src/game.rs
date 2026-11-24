@@ -3,10 +3,8 @@
 //! a round ranks its players and splits its pot, profiles and leverage packs.
 use anchor_lang::prelude::*;
 
-/// TSLAx, NVDAx, AAPLx, XAU (gold), GBP/USD, in that order everywhere.
+/// TSLAx, NVDAx, AAPLx, XAU (gold), GMEx, in that order everywhere.
 pub const ASSETS: usize = 5;
-/// GBP/USD has no MagicBlock feed on the rollups: its price lives in a relay account.
-pub const RELAY_ASSET: u8 = 4;
 
 /// Leverage ladder in tenths: 1x, 1.5x, 2x ... 4x, one step every 6 s.
 pub const LADDER: [u16; 7] = [10, 15, 20, 25, 30, 35, 40];
@@ -15,11 +13,11 @@ pub const STEP_SECONDS: i64 = 6;
 pub const RUN_SECONDS: i64 = 60;
 
 /// Real minute-scale moves are tiny (Tesla moves about 0.07 % in three
-/// minutes, gold and the pound far less), so each market's move is magnified
+/// minutes, gold less), so each market's move is magnified
 /// before the ladder's leverage applies: with a boost of 90 a 0.1 % move of
 /// TSLAx moves the climb like a 9 % move at 1x. Tuned per market from the live
 /// feeds' per-second volatility, so every market plays about as lively.
-pub const BOOST: [u32; ASSETS] = [90, 25, 90, 180, 400];
+pub const BOOST: [u32; ASSETS] = [90, 25, 90, 180, 55];
 
 /// Fixed point of price returns: 1e9 = +100 %.
 pub const PPB: i128 = 1_000_000_000;

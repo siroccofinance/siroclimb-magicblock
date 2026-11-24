@@ -3,7 +3,7 @@
 Before recording: `npm run dev` (or the hosted site), a fresh browser profile, an
 open market (stocks: Sun 20:00 to Fri 20:00 New York, closed on Thanksgiving
 until 20:00 and from 17:00 on the 27th; gold Sun 18:00 to Fri 17:00 with a
-daily hour off at 17:00; GBP/USD every day via the relay). The lobby shows a
+daily hour off at 17:00). The lobby shows a
 closed market as "Closed" with when it opens. Optionally `npm run keeper` so a
 round is always open. Sound on.
 
@@ -11,8 +11,8 @@ round is always open. Sound on.
 
 Landing film, then **Start playing**.
 
-> "Siroclimb is a one-minute leverage climb on real-world assets: Tesla, NVIDIA
-> and Apple xStocks, gold and the pound. Every step adds leverage, up to 4x.
+> "Siroclimb is a one-minute leverage climb on real-world assets: Tesla, NVIDIA,
+> Apple and GameStop xStocks, and gold. Every step adds leverage, up to 4x.
 > Cash out whenever you want; your stake is the most you can lose."
 
 ## 2. One approval, then instant (0:20 to 0:50)

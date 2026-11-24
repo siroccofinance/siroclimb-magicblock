@@ -71,18 +71,17 @@ pub const RECORD_HOLD: i64 = 600;
 
 /// MagicBlock's real-time pricing oracle (Pyth Lazer, pushed into the ERs).
 pub const PRICE_ORACLE_PROGRAM_ID: Pubkey = pubkey!("PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd");
-/// Price accounts, in asset order. The first four are MagicBlock's Pyth Lazer
-/// feeds on the rollup, PDAs `["price_feed", "pyth-lazer", id]`:
-/// TSLA (1435), NVDA (1314), AAPL (922) for the xStocks, XAU/USD (346) for gold.
-/// GBP/USD is our relay account `["relay", 4]` (see `push_price`).
+/// Price accounts, in asset order: MagicBlock's Pyth Lazer feeds on the
+/// rollup, PDAs `["price_feed", "pyth-lazer", id]` of the pricing oracle:
+/// TSLA (1435), NVDA (1314), AAPL (922) for the xStocks, XAU/USD (346) for
+/// gold, GME (1160) for GMEx.
 pub const FEEDS: [Pubkey; ASSETS] = [
     pubkey!("8L7ccCxTBZaLsMMdhAod5fFnpdEWGSDPW4y1td7y3y8N"),
     pubkey!("3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC"),
     pubkey!("B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1"),
     pubkey!("9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn"),
-    pubkey!("2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr"),
+    pubkey!("BjxWySYsKPbDfsNxLRPocTEB55RRPbAuWqMqUJHVgqpE"),
 ];
-pub const RELAY_SEED: &[u8] = b"relay";
 /// A price older than this does not move a climb (it holds still), and a
 /// climb cannot start on it (the market is closed).
 pub const MAX_PRICE_AGE: i64 = 10;
@@ -282,7 +281,7 @@ pub mod siroclimb {
     /// Open round `id` in its slot and ask MagicBlock's VRF to draw its market.
     /// Permissionless: any client that sees the round missing opens it.
     /// `open_markets`: bit mask of the markets whose price is live right now
-    /// (stocks, gold and FX close on weekends): the VRF draws among them.
+    /// (stocks and gold close on weekends): the VRF draws among them.
     pub fn open_round(ctx: Context<OpenRound>, id: u64, open_markets: u8) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let round_key = ctx.accounts.round.key();
@@ -510,43 +509,7 @@ pub mod siroclimb {
         Ok(())
     }
 
-    /// Create the relay price account for a market that has no MagicBlock
-    /// feed on the rollups (GBP/USD), naming the key allowed to push prices.
-    pub fn init_relay(ctx: Context<InitRelay>, market: u8, exponent: i32, relayer: Pubkey) -> Result<()> {
-        require!(market == RELAY_ASSET, ClimbError::BadAsset);
-        let f = &mut ctx.accounts.relay;
-        f.market = market;
-        f.exponent = exponent;
-        f.relayer = relayer;
-        f.bump = ctx.bumps.relay;
-        Ok(())
-    }
-
-    /// Hand the relay account to the rollup, where prices are pushed for free.
-    pub fn delegate_relay(ctx: Context<DelegateRelay>, market: u8) -> Result<()> {
-        ctx.accounts.delegate_relay(
-            &ctx.accounts.admin,
-            &[RELAY_SEED, &[market]],
-            DelegateConfig { validator: ctx.remaining_accounts.first().map(|v| v.key()), ..Default::default() },
-        )?;
-        Ok(())
-    }
-
     // ========================================================= ephemeral rollup
-
-    /// Push a GBP/USD price into the relay account (rollup, no fee). Only the
-    /// relay key named at init; prices must move forward in time.
-    pub fn push_price(ctx: Context<PushPrice>, price: i64, publish_ts: i64) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let f = &mut ctx.accounts.relay;
-        require_keys_eq!(ctx.accounts.relayer.key(), f.relayer, ClimbError::Unauthorized);
-        require!(price > 0, ClimbError::BadPrice);
-        require!(publish_ts >= f.publish_ts && publish_ts <= now + 5, ClimbError::BadPrice);
-        f.price = price;
-        f.publish_ts = publish_ts;
-        f.updates += 1;
-        Ok(())
-    }
 
     /// Start the climb on the rollup: the entry is the live oracle price.
     /// Signed by the climb's session key (anyone may do it after a grace
@@ -803,18 +766,11 @@ fn commit_back<'info>(
 
 /// Read a market's price. MagicBlock Pyth Lazer feeds have the layout of
 /// Pyth's `PriceUpdateV2` (price i64 at 73, publish_time i64 at 93) and are
-/// owned by the pricing oracle; the relay account is ours. Address pinned to
-/// the asset, owner checked, price must be positive.
+/// owned by the pricing oracle. Address pinned to the asset, owner checked,
+/// price must be positive.
 fn read_feed(f: &AccountInfo, asset: u8) -> Result<(u64, i64)> {
     require!((asset as usize) < ASSETS, ClimbError::BadAsset);
     require_keys_eq!(*f.key, FEEDS[asset as usize], ClimbError::WrongFeed);
-    if asset == RELAY_ASSET {
-        require_keys_eq!(*f.owner, crate::ID, ClimbError::WrongFeed);
-        let data = f.try_borrow_data()?;
-        let r = RelayFeed::try_deserialize(&mut &data[..])?;
-        require!(r.price > 0, ClimbError::BadPrice);
-        return Ok((r.price as u64, r.publish_ts));
-    }
     require_keys_eq!(*f.owner, PRICE_ORACLE_PROGRAM_ID, ClimbError::WrongFeed);
     let data = f.try_borrow_data()?;
     require!(data.len() >= 101, ClimbError::WrongFeed);
@@ -844,52 +800,6 @@ pub struct Config {
     pub volume: u64,
     pub paid: u64,
     pub bump: u8,
-}
-
-/// A market price pushed by a named relay key, for markets MagicBlock does
-/// not feed into the rollups. Lives on the rollup.
-#[account]
-#[derive(InitSpace)]
-pub struct RelayFeed {
-    pub market: u8,
-    pub exponent: i32,
-    pub price: i64,
-    pub publish_ts: i64,
-    pub updates: u64,
-    pub relayer: Pubkey,
-    pub bump: u8,
-}
-
-#[derive(Accounts)]
-#[instruction(market: u8)]
-pub struct InitRelay<'info> {
-    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
-    pub admin: Signer<'info>,
-    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, Config>,
-    #[account(init, payer = admin, space = 8 + RelayFeed::INIT_SPACE, seeds = [RELAY_SEED, &[market]], bump)]
-    pub relay: Account<'info, RelayFeed>,
-    pub system_program: Program<'info, System>,
-}
-
-#[delegate]
-#[derive(Accounts)]
-#[instruction(market: u8)]
-pub struct DelegateRelay<'info> {
-    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
-    pub admin: Signer<'info>,
-    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, Config>,
-    /// CHECK: the relay PDA, handed to the delegation program.
-    #[account(mut, del, seeds = [RELAY_SEED, &[market]], bump)]
-    pub relay: UncheckedAccount<'info>,
-}
-
-#[derive(Accounts)]
-pub struct PushPrice<'info> {
-    pub relayer: Signer<'info>,
-    #[account(mut, seeds = [RELAY_SEED, &[relay.market]], bump = relay.bump)]
-    pub relay: Account<'info, RelayFeed>,
 }
 
 #[account]

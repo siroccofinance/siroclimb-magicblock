@@ -41,7 +41,7 @@ const ASSETS = [
   { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', p0: 164.70, vol: 0.0010 },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', p0: 349.03, vol: 0.0007 },
   { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', p0: 3633.4, vol: 0.0006 },
-  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', p0: 1.3031, vol: 0.0005 },
+  { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', p0: 27.46, vol: 0.0009 },
 ];
 
 export const rules = { ladder: [1, 1.5, 2, 2.5, 3, 3.5, 4], stepEvery: 6, duration: 60, roundEntry: 10, prizeSplit: [0.5, 0.3, 0.2] };

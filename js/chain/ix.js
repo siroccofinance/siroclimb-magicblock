@@ -9,7 +9,7 @@ import {
 } from './config.js';
 import { encodeIx, ixAccounts } from './codec.js';
 import {
-  ataOf, bufferPda, relayPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, profilePda, roundPda, roundSlotPda, runPda,
+  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, profilePda, roundPda, roundSlotPda, runPda,
   vrfIdentityPda,
 } from './pdas.js';
 import * as PDAS from './pdas.js';
@@ -87,14 +87,6 @@ export const ix = {
     build('record_round', { caller, round: roundPda(id) }, { id },
       players.map((p) => ({ pubkey: profilePda(p), isSigner: false, isWritable: true }))),
 
-  initRelay: (admin, market, exponent, relayer) => build('init_relay', { admin, relay: relayPda(market) }, { market, exponent, relayer }),
-  delegateRelay: (admin, market, validator) => {
-    const relay = relayPda(market);
-    return build('delegate_relay', {
-      admin, relay, buffer_relay: bufferPda(relay), delegation_record_relay: delegationRecordPda(relay), delegation_metadata_relay: delegationMetadataPda(relay),
-    }, { market }, validatorMeta(validator));
-  },
-
   openPack: (payer, player, sessionToken = null) => build('open_pack', { payer, player, profile: profilePda(player), session_token: sessionToken }),
 
   // ------------------------------------------------------------ the rollup
@@ -102,7 +94,6 @@ export const ix = {
   tickRun: (player, asset) => build('tick_run', { run: runPda(player), feed: feedOf(asset) }),
   cashOut: (payer, player, asset) => build('cash_out', { payer, run: runPda(player), feed: feedOf(asset) }),
   finishRun: (payer, player, asset) => build('finish_run', { payer, run: runPda(player), feed: feedOf(asset) }),
-  pushPrice: (relayer, market, price, publishTs) => build('push_price', { relayer, relay: relayPda(market) }, { price, publish_ts: publishTs }),
   goLive: (payer, id, asset, crank = true) => build('go_live', { payer, round: roundPda(id), feed: feedOf(asset) }, { id, crank }),
   tickRound: (id, asset) => build('tick_round', { round: roundPda(id), feed: feedOf(asset) }),
   cashOutRound: (signer, id, asset) => build('cash_out_round', { signer, round: roundPda(id), feed: feedOf(asset) }, { id }),

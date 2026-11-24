@@ -69,12 +69,4 @@ for (let slot = 0; slot < ROUND_SLOTS; slot++) {
   const sig = await send(conn, [ix2.initRoundSlot(admin.publicKey, slot)], [admin], { label: `round slot ${slot}` });
   console.log('round slot', slot, roundSlotPda(slot).toBase58(), sig);
 }
-// GBP/USD relay account, delegated to the rollup, pushed by the relay key.
-const { relayPda } = await import('../js/chain/pdas.js');
-const { MARKETS, RELAY_ASSET, ER_VALIDATOR } = await import('../js/chain/config.js');
-const relayer = namedKeypair('relayer');
-if (!(await conn.getAccountInfo(relayPda(RELAY_ASSET)))) {
-  const sig = await send(conn, [ix2.initRelay(admin.publicKey, RELAY_ASSET, MARKETS[RELAY_ASSET].exponent, relayer.publicKey), ix2.delegateRelay(admin.publicKey, RELAY_ASSET, ER_VALIDATOR)], [admin], { label: 'relay' });
-  console.log('relay', relayPda(RELAY_ASSET).toBase58(), 'relayer', relayer.publicKey.toBase58(), sig);
-}
 console.log('setup done');
