@@ -9,16 +9,18 @@ import { KEY_DIR } from './lib/env.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3042);
-for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json']]) {
+for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json'], ['SHARE_SECRET', 'share-secret.txt']]) {
   const f = path.join(KEY_DIR, file);
   if (!process.env[env] && fs.existsSync(f)) process.env[env] = fs.readFileSync(f, 'utf8').trim();
 }
-const routes = { '/api/faucet': (await import('../api/faucet.js')).default };
+const routes = { '/api/faucet': (await import('../api/faucet.js')).default, '/api/share': (await import('../api/share.js')).default,
+  '/api/card': (await import('../api/card.js')).default, '/api/s': (await import('../api/s.js')).default };
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (url.pathname.startsWith('/s/')) { req.url = '/api/s?t=' + encodeURIComponent(url.pathname.slice(3)); return routes['/api/s'](req, res); }   // vercel.json rewrite
   if (routes[url.pathname]) return routes[url.pathname](req, res);
   let file = path.join(ROOT, decodeURIComponent(url.pathname));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }
