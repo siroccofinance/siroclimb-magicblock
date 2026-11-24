@@ -8,7 +8,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { coinFaceMaps } from './coin-face.js';
+import { coinFaceMaps } from './coin-face.js?v=2';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { inverseACES, SIROCCO_COLORS, THEMES as HERO_THEMES } from './sirocco-coin-scene.js';
 

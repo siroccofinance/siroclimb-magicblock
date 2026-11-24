@@ -54,7 +54,7 @@ export function coinFaceMaps(N = 2048, anisotropy = 8) {
       for (let c = 0; c < 3; c++) col[i * 4 + c] = f[c] * (1 - m) + l[c] * m + bb * 30;
       col[i * 4 + 3] = 255;
       // roughness (green channel): satin field, polished relief and bead
-      const ro = 0.48 * (1 - m) + 0.13 * m - bead * 0.2 + 0.03 * Math.sin(r * 520);
+      const ro = 0.48 * (1 - m) + 0.24 * m - bead * 0.2 + 0.03 * Math.sin(r * 520);
       rough[i * 4] = rough[i * 4 + 2] = 0; rough[i * 4 + 1] = Math.max(0.05, ro) * 255; rough[i * 4 + 3] = 255;
     }
   }
