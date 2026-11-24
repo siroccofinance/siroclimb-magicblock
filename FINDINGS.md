@@ -22,8 +22,12 @@ MagicBlock come first, then bugs.
 4. **Each delegation costs about 0.003 SOL on 2.0.** The delegation record and metadata rent
    (2 × 1,559,040 lamports) paid by whoever delegates is not returned at undelegation:
    2.7 M lamports go to a fee account and 0.3 M to the validator, about 0.12 M come back. A
-   climb is one delegation, so a session key topped up with 0.05 SOL plays about 15 climbs; the
-   front tops it up again from the wallet when it runs low (`ensureFuel`).
+   climb is one delegation, so a session key topped up with 0.05 SOL plays about 15 climbs. The
+   front now funds the session key in proportion to the wallet (up to 0.2 SOL, about 60 climbs),
+   shows the fuel left in climbs in the wallet menu, and says why the wallet asks again when it
+   runs out. Removing the cost itself means keeping a player's run delegated between climbs
+   (commit without undelegating, settle from the committed state): a program redesign left for
+   after the hackathon.
 5. **Rollup transactions need no SOL at all.** The relay key and the practice players sign
    rollup transactions with an empty balance; only the base-layer steps (stake, delegate,
    settle) cost fees.
