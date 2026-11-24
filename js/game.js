@@ -543,7 +543,7 @@ async function loadReserve() {
   if (!R) { $('#resStats').innerHTML = '<div><dt>Status</dt><dd>Opening soon</dd></div>'; return; }
   const big = v => (v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'k' : money(v));
   const rows = [['TVL', `${big(R.tvl)} tUSDC`], ['Utilization', `${(R.utilization * 100).toFixed(2)}%`], ['Borrow lines open', `${big(R.lines)} tUSDC`],
-    ['Share price', R.sharePrice.toFixed(6)], ['Lender APY', `${R.apy >= 0 ? '' : '−'}${Math.abs(R.apy * 100).toFixed(2)}%`], ['Borrow rate', `${R.aprBorrow}% APR + ${(R.feeBps / 100).toFixed(1)}%`]];
+    ['Share price', R.sharePrice.toFixed(6)], ['Lender APY', `${R.apy >= 0 ? '' : '−'}${Math.abs(R.apy * 100).toFixed(2)}%`], ['Borrow APR + fee', `${R.aprBorrow}% + ${(R.feeBps / 100).toFixed(1)}%`]];
   $('#resStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   $('#resMe').innerHTML = R.me && R.me.shares > 0 ? `You lend <b>${money(R.me.value)} tUSDC</b> (${money(R.me.shares)} shares).`
     : api.account() ? 'You have nothing lent yet.' : 'Connect a wallet to lend.';
