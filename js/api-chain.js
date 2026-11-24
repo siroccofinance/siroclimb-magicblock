@@ -483,8 +483,8 @@ export async function shareCard() {
     await sleep(i ? 1500 : 800);
     try {
       const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ player }) });
-      if (r.ok) return (await r.json()).url;
-      if (r.status !== 409) return null;
+      if (r.status === 200) return (await r.json()).url;
+      if (r.status !== 202) return null;
     } catch { return null; }
   }
   return null;
