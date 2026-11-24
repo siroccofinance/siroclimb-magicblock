@@ -42,6 +42,10 @@ pub const CONFIG_SEED: &[u8] = b"config";
 pub const FAUCET_SEED: &[u8] = b"faucet";
 pub const PROFILE_SEED: &[u8] = b"profile";
 pub const RUN_SEED: &[u8] = b"run";
+/// Seed of the retired round slots, kept only to close them (`close_round_slot`).
+pub const ROUND_SEED: &[u8] = b"round";
+/// Offset of `status` in a retired round slot (8 + the zero-copy layout); `slot` is the byte before.
+pub const ROUND_STATUS_AT: usize = 2633;
 
 pub const ONE_USDC: u64 = 1_000_000;
 /// The faucet tops a wallet back up to this balance.
@@ -116,6 +120,25 @@ pub mod siroclimb {
             amount,
             seeds,
         )
+    }
+
+    /// Close a round slot left from the retired round mode and hand its rent
+    /// back to the admin. Only an idle slot (free or settled) on Solana.
+    pub fn close_round_slot(ctx: Context<CloseRoundSlot>, slot: u8) -> Result<()> {
+        let r = &ctx.accounts.round;
+        require_keys_eq!(*r.owner, crate::ID, ClimbError::BadRound);
+        {
+            let data = r.try_borrow_data()?;
+            require!(data.len() > ROUND_STATUS_AT, ClimbError::BadRound);
+            require!(data[ROUND_STATUS_AT - 1] == slot, ClimbError::BadRound);
+            let status = data[ROUND_STATUS_AT];
+            require!(status == 0 || status == 5, ClimbError::SlotBusy);
+        }
+        let admin = ctx.accounts.admin.to_account_info();
+        **admin.try_borrow_mut_lamports()? += r.lamports();
+        **r.try_borrow_mut_lamports()? = 0;
+        r.try_borrow_mut_data()?.fill(0);
+        Ok(())
     }
 
     /// Devnet faucet: tops the wallet back up to 1,000 test USDC.
@@ -539,6 +562,18 @@ pub struct FundHouse<'info> {
     /// CHECK: address-checked SPL Token program.
     #[account(address = TOKEN_PROGRAM_ID)]
     pub token_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(slot: u8)]
+pub struct CloseRoundSlot<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the retired round slot PDA, owner and status checked in the handler.
+    #[account(mut, seeds = [ROUND_SEED, &[slot]], bump)]
+    pub round: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
