@@ -36,3 +36,6 @@ export function reserveView(r, vault, nowS = Date.now() / 1000) {
     paidToPlayers: r.paidToPlayers / 1e6, keptFromPlayers: r.keptFromPlayers / 1e6, aprBorrow: BORROW_APR_BPS / 100, feeBps: BORROW_FEE_BPS,
   };
 }
+/// What a climb may owe beyond its stake (reserved while it runs), and its borrow line.
+export const exposureOf = (stake) => stake * (MAX_PAYOUT_MULT - 1);
+export const lineOf = (stake, top, pack) => Math.floor((stake * (pack ? lev10(top) : lev10(top) - 10)) / 10);
