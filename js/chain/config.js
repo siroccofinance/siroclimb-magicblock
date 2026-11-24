@@ -1,7 +1,7 @@
 // Addresses, endpoints and game constants shared by the front, the ops
 // scripts (keeper, bots, battery) and the tests.
 //
-//   BASE  Solana devnet: faucet, stakes, round entries, settlement, profiles, VRF.
+//   BASE  Solana devnet: faucet, stakes, settlement, profiles, VRF.
 //   ER    The MagicBlock Ephemeral Rollup the climbs are delegated to.
 //
 // Overrides (all optional): `globalThis.SIROCLIMB_ENV` in the browser, the
@@ -26,7 +26,7 @@ export const MAGIC_PROGRAM_ID = new PublicKey('Magic1111111111111111111111111111
 export const MAGIC_CONTEXT_ID = new PublicKey('MagicContext1111111111111111111111111111111');
 export const SESSION_PROGRAM_ID = new PublicKey('KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5');
 export const VRF_PROGRAM_ID = new PublicKey('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
-/// VRF oracle queue for requests made on Solana (round markets, packs).
+/// VRF oracle queue for requests made on Solana (leverage packs).
 export const VRF_BASE_QUEUE = new PublicKey('Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh');
 export const SLOT_HASHES = new PublicKey('SysvarS1otHashes111111111111111111111111111');
 export const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -63,12 +63,8 @@ export const LADDER = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
 export const BOOST = [90, 25, 90, 180, 55];
-export const ROUND_CYCLE = 80;
-export const ROUND_JOIN_SECONDS = 20;
+/// Retired round slots still on chain until closed.
 export const ROUND_SLOTS = 4;
-export const ROUND_ENTRY = 10;
-export const MAX_PLAYERS = 24;
-export const PRIZE_SPLIT = [0.5, 0.3, 0.2];
 export const MAX_PRICE_AGE = 10;
 export const PACK_STAKE = 10;
 export const PACK_COOLDOWN = 600;
@@ -81,7 +77,6 @@ export const PACKS = [
 ];
 
 export const RUN = { FREE: 0, STAKED: 1, LIVE: 2, CASHED: 3, BUSTED: 4, EXPIRED: 5, SETTLED: 6 };
-export const ROUND = { FREE: 0, DRAWING: 1, OPEN: 2, LIVE: 3, FINISHED: 4, SETTLED: 5 };
 export const PACK = { NONE: 0, DRAWING: 1, READY: 2 };
 export const NONE = 255;
 
