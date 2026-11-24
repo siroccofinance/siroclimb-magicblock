@@ -2,8 +2,7 @@
 // siroclimb program on Solana devnet and a MagicBlock Ephemeral Rollup.
 //
 //   prices     MagicBlock's Pyth Lazer feed accounts read from the rollup every
-//              250 ms (GBP/USD: the program's relay account, kept fresh by
-//              /api/relay while someone is watching).
+//              250 ms.
 //   wallet     Phantom / Solflare / Backpack, or a built-in devnet burner. One
 //              approval creates the profile, tops up test USDC, authorises a
 //              MagicBlock session key and lets it stake: every later action
@@ -15,7 +14,7 @@
 //              Practice bots run in this browser when a round is too empty.
 import { Connection, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import {
-  BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PRIZE_SPLIT, PROGRAM_ID, RELAY_ASSET,
+  BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PRIZE_SPLIT, PROGRAM_ID,
   ROUND, ROUND_CYCLE, ROUND_ENTRY, ROUND_JOIN_SECONDS, RUN, RUN_SECONDS, STEP_SECONDS, NONE, PACK, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
@@ -77,14 +76,6 @@ async function seedHistory() {
   }));
 }
 seedHistory();
-
-// GBP/USD has no MagicBlock feed: ask the relay to push while this page is visible.
-const RELAY_URL = (globalThis.SIROCLIMB_ENV && globalThis.SIROCLIMB_ENV.RELAY_URL) || 'api/relay';
-let relayOk = true;
-setInterval(() => {
-  if (!relayOk || (globalThis.document && document.hidden)) return;
-  fetch(RELAY_URL, { method: 'POST' }).then((r) => { if (r.status === 404) relayOk = false; }).catch(() => {});
-}, 1500);
 
 export const listAssets = () => MARKETS.map(({ id, name, ticker, kind, hours }) => ({ id, name, ticker, kind, hours }));
 export const marketOpen = (id) => isOpen(feeds[marketIndex(id)]);
