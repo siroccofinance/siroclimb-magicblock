@@ -3,6 +3,8 @@
 //! profiles and leverage packs.
 use anchor_lang::prelude::*;
 
+use crate::reserve::{borrowed_at, MAX_PAYOUT_MULT};
+
 /// TSLAx, NVDAx, AAPLx, XAU (gold), GMEx, in that order everywhere.
 pub const ASSETS: usize = 5;
 
@@ -108,6 +110,12 @@ pub enum ClimbError {
     Crank,
     #[msg("This market is outside its trading sessions")]
     MarketClosed,
+    #[msg("The Sirocco Reserve cannot cover this climb right now")]
+    ReserveFull,
+    #[msg("Not enough free liquidity in the reserve")]
+    NotEnoughLiquidity,
+    #[msg("Not enough reserve shares")]
+    BadShares,
 }
 
 /// The ladder step at `t` seconds into a climb, capped at `top`.
@@ -247,6 +255,14 @@ pub struct Run {
     pub payout: u64,
     pub task_id: i64,
     pub bump: u8,
+    // Sirocco Reserve (appended: older run accounts are grown by `grow_run`).
+    /// Borrowed from the reserve right now: stake x (leverage - 1), live on the rollup.
+    pub borrowed: u64,
+    /// Borrow fee + interest charged at settlement (solo climbs).
+    pub cost: u64,
+    /// Liquidity reserved for this climb, and its borrow line, released at settlement.
+    pub reserved: u64,
+    pub line: u64,
 }
 
 impl Run {
@@ -261,7 +277,9 @@ impl Run {
         }
         let t = (now - self.start_ts).min(RUN_SECONDS);
         let step = step_at(t, self.top);
-        self.value = moved(self.value, LADDER[step as usize], self.side, BOOST[self.asset as usize], self.last_price, price);
+        self.value = moved(self.value, LADDER[step as usize], self.side, BOOST[self.asset as usize], self.last_price, price)
+            .min(self.stake.saturating_mul(MAX_PAYOUT_MULT));
+        self.borrowed = borrowed_at(self.stake, step);
         self.last_price = price;
         self.last_tick_ts = now;
         self.ticks += 1;
@@ -275,12 +293,13 @@ impl Run {
         }
     }
 
-    /// What settlement pays back: the position, or for a free pack climb only the gain.
+    /// What settlement pays back: the position less the borrow cost, or for a
+    /// free pack climb only the gain.
     pub fn payout_for(&self) -> u64 {
         if self.mode == MODE_PACK {
             self.value.saturating_sub(self.stake)
         } else {
-            self.value
+            self.value.saturating_sub(self.cost)
         }
     }
 }
@@ -347,7 +366,23 @@ mod tests {
             payout: 0,
             task_id: 0,
             bump: 0,
+            borrowed: 0,
+            cost: 0,
+            reserved: 0,
+            line: 0,
         }
+    }
+
+    #[test]
+    fn value_is_capped_and_borrow_follows_the_ladder() {
+        let mut r = live_run();
+        r.advance(1_000_000, 1013); // step 2: 2x
+        assert_eq!(r.borrowed, 10_000_000);
+        r.advance(2_000_000, 1040); // +100 % at 4x, boost 90: far past the cap
+        assert_eq!(r.value, 50_000_000);
+        assert_eq!(r.borrowed, 30_000_000);
+        r.cost = 400_000;
+        assert_eq!(r.payout_for(), 49_600_000);
     }
 
     #[test]
