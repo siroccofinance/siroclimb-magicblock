@@ -10,8 +10,8 @@
 import { LiteSVM } from 'litesvm';
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT, ROUND_SLOTS, VRF_PROGRAM_ID } from '../../js/chain/config.js';
-import { configPda, ataOf, runPda } from '../../js/chain/pdas.js';
+import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
+import { configPda, ataOf, roundSlotPda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { decodeRun } from '../../js/chain/codec.js';
 
@@ -71,7 +71,6 @@ let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
 ok('initialize', r.ok, r.logs.slice(-2).join(' '));
 r = send([createAtaIdempotent(player.publicKey, player.publicKey), ix.faucet(player.publicKey), ix.initProfile(player.publicKey, 'nomad_trader')], [player]);
 ok('player: token account, faucet, profile', r.ok, r.logs.slice(-2).join(' '));
-for (let s = 0; s < ROUND_SLOTS; s++) send([ix.initRoundSlot(admin.publicKey, s)], [admin]);
 
 const stake = (label, when, expectCode) => {
   at(utc(when));
@@ -101,13 +100,21 @@ ok('the climb stays staked (refundable by finish_run)', runStatus() === 1, `stat
 begin('Monday 10:00 New York', '2026-11-23T15:00:00Z');
 ok('the climb is live', runStatus() === 2, `status ${runStatus()}`);
 
-// the VRF program only has to exist for account checks: the draw is refused before any call to it
-svm.addProgramFromFile(VRF_PROGRAM_ID, new URL('../../chain/target/deploy/siroclimb.so', import.meta.url).pathname);
-// rounds: on a Saturday every market is closed, so a draw has nothing to pick
-at(utc('2026-11-28T15:00:00Z'));
-const id = Math.floor(utc('2026-11-28T15:00:20Z') / 80);
-const rr = send([ix.openRound(player.publicKey, id, 0b11111)], [player]);
-ok('Saturday: a round draw over closed markets is refused (BadAsset 6007)', !rr.ok && rr.code === 6007, `code ${rr.code}`);
+// retired round slots: only an idle one closes, only for the admin, and its rent goes back
+function roundSlot(slot, status) {
+  const d = Buffer.alloc(2640);
+  d[2632] = slot; d[2633] = status;
+  svm.setAccount(roundSlotPda(slot), { lamports: 14_061_440, data: d, owner: PROGRAM_ID, executable: false });
+}
+roundSlot(0, 5); roundSlot(1, 3);
+let cr = send([ix.closeRoundSlot(player.publicKey, 0)], [player]);
+ok('a player cannot close a round slot (Unauthorized 6000)', !cr.ok && cr.code === 6000, `code ${cr.code}`);
+cr = send([ix.closeRoundSlot(admin.publicKey, 1)], [admin]);
+ok('a live round slot is not closed (SlotBusy 6018)', !cr.ok && cr.code === 6018, `code ${cr.code}`);
+const before = svm.getBalance(admin.publicKey);
+cr = send([ix.closeRoundSlot(admin.publicKey, 0)], [admin]);
+const gone = svm.getAccount(roundSlotPda(0));
+ok('a settled round slot closes and its rent goes to the admin', cr.ok && (!gone || gone.lamports === 0) && svm.getBalance(admin.publicKey) > before, cr.logs.slice(-2).join(' '));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
