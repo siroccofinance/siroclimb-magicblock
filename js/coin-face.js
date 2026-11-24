@@ -49,7 +49,7 @@ export function coinFaceMaps(N = 2048, anisotropy = 8) {
       // colour (sRGB): field warm gold, darker in the contact shade; relief lighter, a soft top-down gradient
       const grad = 1 - (y / N - 0.5) * 0.12;
       const f = [200, 144, 64].map(v => v * (1 - 0.2 * sh) * grad);
-      const l = [246, 211, 120].map(v => v * grad);
+      const l = [250, 204, 92].map(v => v * grad);
       const bb = bead * 0.5;
       for (let c = 0; c < 3; c++) col[i * 4 + c] = f[c] * (1 - m) + l[c] * m + bb * 30;
       col[i * 4 + 3] = 255;
