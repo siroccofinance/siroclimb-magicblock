@@ -21,7 +21,6 @@ let pg = await page(b);
 await pg.goto(URL, { waitUntil: 'networkidle2' }); await wait(2500); await shot(pg, '1-landing');
 await pg.goto(URL + '#play', { waitUntil: 'networkidle2' }); await wait(3500); await shot(pg, '2-lobby');
 await pg.click('#wallet'); await wait(1500); await shot(pg, '3-wallet-menu');
-await pg.click('#wallet'); await pg.click('#mode [data-v=round]'); await wait(1200); await shot(pg, '4-round-lobby');
 await pg.close();
 // 2. closed markets: the page believes it is Saturday noon in New York
 pg = await page(b, { init: () => { const real = Date.now, shift = Date.parse('2026-11-28T17:00:00Z') - real(); Date.now = () => real() + shift; const D = Date; globalThis.Date = class extends D { constructor(...a) { super(...(a.length ? a : [D.now()])); } static now() { return D.now(); } }; } });

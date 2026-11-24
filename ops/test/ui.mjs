@@ -1,7 +1,7 @@
 // The real front against devnet + the rollup, in headless Chrome, from an
 // empty burner wallet: site faucet SOL, one-approval onboarding, a solo climb
-// cashed out, explorer proof links; with FLOW=round, a round with the
-// in-browser practice players, cashed out and settled. Screenshots in out/.
+// cashed out, explorer proof links; FLOW=pack plays a leverage pack, FLOW=menu
+// the wallet menu. Screenshots in out/.
 import puppeteer from 'puppeteer-core';
 const URL = process.env.APP_URL || 'http://127.0.0.1:3042/';
 const FLOW = process.env.FLOW || 'solo';
@@ -37,13 +37,8 @@ await wait(800);
 // an open market
 const open = await pg.$$eval('.market', (els) => els.filter((e) => !e.classList.contains('is-closed')).map((e) => e.dataset.v));
 say('open markets', open.join(' '));
-if (FLOW === 'round') { await pg.click('#mode [data-v=round]'); await wait(500); }
-else { await pg.click('#mode [data-v=solo]'); await wait(300); await pg.click(`.market[data-v="${process.env.MARKET && open.includes(process.env.MARKET) ? process.env.MARKET : open[0]}"]`); }
+await pg.click(`.market[data-v="${process.env.MARKET && open.includes(process.env.MARKET) ? process.env.MARKET : open[0]}"]`);
 await pg.screenshot({ path: 'out/ui-1lobby.png' });
-if (FLOW === 'round') {
-  // join when the window is open
-  await until(async () => /Join for/.test(await text('#go')), 90000, 'join window');
-}
 const connected = /^\w{4}…\w{4}$/.test(await text('#wallet'));
 if (!(FLOW === 'menu' && connected)) await pg.click(FLOW === 'menu' ? '#wallet' : '#go');
 // no browser wallet in headless Chrome: the burner is the only choice, picked directly
@@ -93,20 +88,6 @@ if (FLOW === 'menu') {
   say('proof', (await pg.$$eval('#rProof a', (as) => as.map((a) => a.textContent))).join(' | '));
   await pg.screenshot({ path: 'out/ui-4result.png' });
   say('balance', await text('#bal'));
-} else {
-  await until(async () => /Starts in/.test(await text('#go')) && /You are in/.test(await text('#goMeta')), 90000, 'joined');
-  say('joined', await text('#goMeta'));
-  await until(async () => (await scr()) === 'game', 60000, 'round live');
-  say('round live', await text('#hT'));
-  await wait(12000);
-  await pg.screenshot({ path: 'out/ui-3round.png' });
-  say('standings', (await pg.$$eval('#standings li', (l) => l.map((x) => x.textContent))).join(' | '));
-  await pg.click('#cash');
-  await until(async () => (await scr()) === 'result', 30000, 'result');
-  say('result', await text('#rV'));
-  await until(async () => /of \d/.test(await text('#rR')), 120000, 'round final');
-  say('final', await text('#rR'));
-  await pg.screenshot({ path: 'out/ui-4round-result.png' });
 }
 await b.close();
 say(errs.length ? `FAIL ${errs.length} console errors` : 'OK, 0 console errors');
