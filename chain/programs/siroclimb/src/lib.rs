@@ -559,6 +559,8 @@ pub mod siroclimb {
         require!(signer == run.session || signer == run.player || now > run.created_ts + BEGIN_GRACE, ClimbError::Unauthorized);
         let (price, ts) = read_feed(&ctx.accounts.feed, run.asset)?;
         require!(now - ts <= MAX_PRICE_AGE, ClimbError::StalePrice);
+        // Pyth keeps publishing a frozen price while a market is closed.
+        require!(hours::in_session(run.asset, now), ClimbError::MarketClosed);
         run.entry_price = price;
         run.last_price = price;
         run.start_ts = now;
