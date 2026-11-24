@@ -76,6 +76,9 @@ const saveSess = (w, s) => fs.writeFileSync(sessFile(w), JSON.stringify({ secret
 // Top-up of the players' SOL (session-key fuel); lower both on a tight deployer budget.
 const FUND_MIN = Number(process.env.BATTERY_FUND_MIN || 0.03) * 1e9;
 const FUND_AMOUNT = Number(process.env.BATTERY_FUND_AMOUNT || 0.075) * 1e9;
+// Session-key fuel (each climb's delegation costs about 0.003 SOL), topped up from the player's wallet.
+const SESSION_MIN = Number(process.env.BATTERY_SESSION_MIN || 0.03) * 1e9;
+const SESSION_TOP_UP = Number(process.env.BATTERY_SESSION_TOP_UP || 0.04) * 1e9;
 async function fundAll() {
   const need = [];
   for (const w of wallets) if ((await base.getBalance(w.publicKey)) < FUND_MIN) need.push(w);
@@ -99,7 +102,7 @@ await Promise.all(climbers.map(async (c, i) => {
   // A session's SOL goes to the delegation fee of each climb: keep it fueled.
 }));
 await Promise.all(climbers.map(async (c) => {
-  if ((await base.getBalance(c.session.keypair.publicKey)) < 0.03e9) await c.topUpSession(0.04e9);
+  if ((await base.getBalance(c.session.keypair.publicKey)) < SESSION_MIN) await c.topUpSession(SESSION_TOP_UP);
   if ((await c.usdc()) < 300) await c.faucet().catch(() => {});
 }));
 const field = climbers.slice(0, N), spare = climbers[N];
