@@ -45,6 +45,7 @@ pub const FAUCET_SEED: &[u8] = b"faucet";
 pub const PROFILE_SEED: &[u8] = b"profile";
 pub const RUN_SEED: &[u8] = b"run";
 pub const RESERVE_SEED: &[u8] = b"reserve";
+pub const LENDER_SEED: &[u8] = b"lender";
 /// Seed of the retired round slots, kept only to close them (`close_round_slot`).
 pub const ROUND_SEED: &[u8] = b"round";
 /// Offset of `status` in a retired round slot (8 + the zero-copy layout); `slot` is the byte before.
@@ -143,6 +144,72 @@ pub mod siroclimb {
         **admin.try_borrow_mut_lamports()? += r.lamports();
         **r.try_borrow_mut_lamports()? = 0;
         r.try_borrow_mut_data()?.fill(0);
+        Ok(())
+    }
+
+    /// Open the Sirocco Reserve. The tUSDC already in the vault (the house
+    /// bankroll) becomes the admin's lender position, one share per tUSDC: the
+    /// deployer is the first lender.
+    pub fn init_reserve(ctx: Context<InitReserve>) -> Result<()> {
+        let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let rs = &mut ctx.accounts.reserve;
+        rs.shares = vault;
+        rs.deposits = vault;
+        rs.created_ts = Clock::get()?.unix_timestamp;
+        rs.bump = ctx.bumps.reserve;
+        let l = &mut ctx.accounts.lender;
+        l.owner = ctx.accounts.admin.key();
+        l.shares = vault;
+        l.deposited = vault;
+        l.bump = ctx.bumps.lender;
+        msg!("reserve opened with {} tUSDC from the admin", vault);
+        Ok(())
+    }
+
+    /// Lend tUSDC to the reserve for shares at the current share price.
+    /// Signed by the wallet, or by its session key (the wallet's approved spender).
+    pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let owner = ctx.accounts.owner.key();
+        authorize(&ctx.accounts.signer.key(), &owner, &ctx.accounts.session_token, now)?;
+        require!(amount >= ONE_USDC, ClimbError::BadStake);
+        let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let rs = &mut ctx.accounts.reserve;
+        let n = shares_for(amount, assets_of(vault, rs.staked), rs.shares);
+        require!(n > 0, ClimbError::BadShares);
+        stake_in(&ctx.accounts.token_program, &ctx.accounts.owner_usdc, &ctx.accounts.vault, &ctx.accounts.signer, &owner, &ctx.accounts.config.usdc_mint, amount)?;
+        rs.shares += n;
+        rs.deposits += amount;
+        let l = &mut ctx.accounts.lender;
+        l.owner = owner;
+        l.shares += n;
+        l.deposited += amount;
+        l.bump = ctx.bumps.lender;
+        msg!("deposit {} for {} shares", amount, n);
+        Ok(())
+    }
+
+    /// Redeem `shares` for tUSDC at the current share price, up to the
+    /// reserve's free liquidity (what open climbs have reserved stays).
+    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let owner = ctx.accounts.owner.key();
+        authorize(&ctx.accounts.signer.key(), &owner, &ctx.accounts.session_token, now)?;
+        token_balance(&ctx.accounts.owner_usdc, &ctx.accounts.config.usdc_mint, Some(&owner))?;
+        require!(shares > 0 && shares <= ctx.accounts.lender.shares, ClimbError::BadShares);
+        let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let rs = &mut ctx.accounts.reserve;
+        let assets = assets_of(vault, rs.staked);
+        let amount = value_of(shares, assets, rs.shares);
+        require!(amount <= assets.saturating_sub(rs.reserved), ClimbError::NotEnoughLiquidity);
+        let seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
+        token_transfer(&ctx.accounts.token_program, &ctx.accounts.vault, &ctx.accounts.owner_usdc, &ctx.accounts.config.to_account_info(), amount, Some(seeds))?;
+        rs.shares -= shares;
+        rs.withdrawals += amount;
+        let l = &mut ctx.accounts.lender;
+        l.shares -= shares;
+        l.withdrawn += amount;
+        msg!("withdraw {} shares for {}", shares, amount);
         Ok(())
     }
 
@@ -645,6 +712,71 @@ pub struct CloseRoundSlot<'info> {
     /// CHECK: the retired round slot PDA, owner and status checked in the handler.
     #[account(mut, seeds = [ROUND_SEED, &[slot]], bump)]
     pub round: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitReserve<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(init, payer = admin, space = 8 + Reserve::INIT_SPACE, seeds = [RESERVE_SEED], bump)]
+    pub reserve: Box<Account<'info, Reserve>>,
+    #[account(init, payer = admin, space = 8 + Lender::INIT_SPACE, seeds = [LENDER_SEED, admin.key().as_ref()], bump)]
+    pub lender: Box<Account<'info, Lender>>,
+    /// CHECK: the config's vault.
+    #[account(address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Deposit<'info> {
+    /// The wallet, or a session key authorised by it.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    /// CHECK: the lender (the wallet).
+    pub owner: UncheckedAccount<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, seeds = [RESERVE_SEED], bump = reserve.bump)]
+    pub reserve: Box<Account<'info, Reserve>>,
+    #[account(init_if_needed, payer = signer, space = 8 + Lender::INIT_SPACE, seeds = [LENDER_SEED, owner.key().as_ref()], bump)]
+    pub lender: Box<Account<'info, Lender>>,
+    /// CHECK: the lender's test-USDC account, checked in `stake_in`.
+    #[account(mut)]
+    pub owner_usdc: UncheckedAccount<'info>,
+    /// CHECK: the config's vault.
+    #[account(mut, address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: address-checked SPL Token program.
+    #[account(address = TOKEN_PROGRAM_ID)]
+    pub token_program: UncheckedAccount<'info>,
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    pub signer: Signer<'info>,
+    /// CHECK: the lender (the wallet).
+    pub owner: UncheckedAccount<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, seeds = [RESERVE_SEED], bump = reserve.bump)]
+    pub reserve: Box<Account<'info, Reserve>>,
+    #[account(mut, seeds = [LENDER_SEED, owner.key().as_ref()], bump = lender.bump)]
+    pub lender: Box<Account<'info, Lender>>,
+    /// CHECK: the lender's test-USDC account, owner checked in the handler.
+    #[account(mut)]
+    pub owner_usdc: UncheckedAccount<'info>,
+    /// CHECK: the config's vault.
+    #[account(mut, address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: address-checked SPL Token program.
+    #[account(address = TOKEN_PROGRAM_ID)]
+    pub token_program: UncheckedAccount<'info>,
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 #[derive(Accounts)]
