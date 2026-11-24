@@ -18,11 +18,10 @@ import fs from 'fs';
 import path from 'path';
 import { Keypair, SystemProgram } from '@solana/web3.js';
 import { Climber, readPrice } from '../js/chain/climber.js';
-import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, RELAY_ASSET, ROUND, ROUND_CYCLE, RUN, LADDER } from '../js/chain/config.js';
+import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, ROUND, ROUND_CYCLE, RUN, LADDER } from '../js/chain/config.js';
 import { decodeRun } from '../js/chain/codec.js';
 import { ix } from '../js/chain/ix.js';
 import { profilePda, runPda, roundPda } from '../js/chain/pdas.js';
-import { pushOnce } from '../js/chain/relay.js';
 import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
 import { uniqueHandles } from '../js/chain/handles.js';
@@ -58,12 +57,6 @@ async function refuse(tag, name, code, fn) {
 }
 const usdcOf = async (c) => Math.round((await c.usdc()) * ONE_USDC);
 
-// ------------------------------------------------------------- price relay
-let relayOn = true;
-(async () => {
-  const relayer = namedKeypair('relayer');
-  while (relayOn) { await pushOnce(er, relayer, { minGapS: 0 }).catch(() => {}); await sleep(700); }
-})();
 async function openMarkets() {
   const now = Date.now() / 1000, out = [];
   for (let i = 0; i < MARKETS.length; i++) {
@@ -188,7 +181,7 @@ for (let w = 1; w <= WAVES; w++) {
   const tag = 'refusals', c = field[0], d = field[1];
   await refuse(tag, 'stake above 100 tUSDC', 6009, () => send(base, [ix.startRun(c.actor.publicKey, c.me, { asset: 0, side: 0, stake: 500n * BigInt(ONE_USDC) }, c.token)], [c.actor], { label: 'big', attempts: 1 }));
   await refuse(tag, 'a session key acting for another wallet', 6000, () => send(base, [ix.startRun(c.actor.publicKey, d.me, { asset: 0, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [c.actor], { label: 'impersonate', attempts: 1 }));
-  await refuse(tag, 'a price pushed by a player', 6000, () => send(er, [ix.pushPrice(c.actor.publicKey, RELAY_ASSET, 130000n, BigInt(Math.floor(Date.now() / 1000)))], [c.actor], { label: 'push', attempts: 1 }));
+  await refuse(tag, 'a market that does not exist', 6007, () => send(base, [ix.startRun(c.actor.publicKey, c.me, { asset: 9, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [c.actor], { label: 'badasset', attempts: 1 }));
   await refuse(tag, 'a pack climb without a pack', 6023, () => send(base, [ix.startRun(c.actor.publicKey, c.me, { asset: 0, side: 0, stake: 0n, usePack: true }, c.token)], [c.actor], { label: 'nopack', attempts: 1 }));
   await refuse(tag, 'faucet twice in a row', 6006, async () => { await c.faucet().catch(() => {}); await c.faucet(); });
 }
@@ -290,7 +283,6 @@ for (let k = 0; k < ROUNDS; k++) await playRound(k).catch((e) => check('round', 
     plays.forEach((p, i) => { if (tiers[i] != null && p.status === 'rejected') check(`${names[i]} pack`, 'pack climb completed', false, p.reason.message.slice(0, 160)); });
   }
 }
-relayOn = false;
 
 // ------------------------------------------------------------------ report
 const adminEnd = await base.getBalance(admin.publicKey);

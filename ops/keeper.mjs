@@ -2,7 +2,6 @@
 // is permissionless and the front sends the same ones itself (autopilot). It
 // makes the game feel alive with nobody else online:
 //
-//   relay      pushes GBP/USD into the relay account every 700 ms
 //   rounds     opens every round (VRF market draw) so the lobby always has
 //              one, delegates, starts, finishes, settles and records them
 //   players    two to four house players join a round nobody else joined
@@ -14,7 +13,6 @@ import { Keypair, SystemProgram } from '@solana/web3.js';
 import { Climber, readPrice } from '../js/chain/climber.js';
 import { MARKETS, MAX_PRICE_AGE, PROGRAM_ID, ROUND, ROUND_CYCLE, RUN, RUN_SECONDS } from '../js/chain/config.js';
 import { decodeRun, discriminator } from '../js/chain/codec.js';
-import { pushOnce } from '../js/chain/relay.js';
 import { inSession } from '../js/chain/hours.js';
 import { send, sleep } from '../js/chain/tx.js';
 import { friendlyError } from '../js/chain/errors.js';
@@ -39,10 +37,6 @@ for (const [i, c] of house.entries()) {
   if (!(await c.profile())) await send(base, [(await import('../js/chain/ix.js')).createAtaIdempotent(c.me, c.me), (await import('../js/chain/ix.js')).ix.faucet(c.me), (await import('../js/chain/ix.js')).ix.initProfile(c.me, houseNames[i])], [houseKeys[i]], { label: 'house player' });
 }
 say('keeper', short(keeperKey.publicKey), 'house players', houseNames.join(', '));
-
-// relay
-const relayer = namedKeypair('relayer');
-(async () => { for (;;) { await pushOnce(er, relayer, { minGapS: 0 }).catch(() => {}); await sleep(700); } })();
 
 const openMask = async () => {
   let m = 0;
