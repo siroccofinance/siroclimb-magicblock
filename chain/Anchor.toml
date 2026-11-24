@@ -14,4 +14,4 @@ siroclimb = "29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov"
 
 [provider]
 cluster = "devnet"
-wallet = "~/.config/solana/id.json"
+wallet = "~/.config/siroclimb/solana/deployer.json"
