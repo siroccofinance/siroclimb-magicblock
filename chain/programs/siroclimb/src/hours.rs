@@ -6,15 +6,13 @@
 //! front reads (js/chain/hours.js): US equities run from Sunday 20:00 to Friday
 //! 20:00 across their overnight, pre-market, regular and post-market sessions;
 //! gold from Sunday 18:00 to Friday 17:00 with a daily hour off at 17:00. The
-//! holiday overrides are the union of each session's overrides. GBP/USD (the
-//! relay, whose source trades every day) is always in session.
+//! holiday overrides are the union of each session's overrides.
 
 pub const KIND_EQUITY: u8 = 0;
 pub const KIND_METAL: u8 = 1;
-pub const KIND_ALWAYS: u8 = 2;
 
-/// Session kind per asset: TSLAx, NVDAx, AAPLx, XAU, GBP/USD.
-pub const KINDS: [u8; 5] = [KIND_EQUITY, KIND_EQUITY, KIND_EQUITY, KIND_METAL, KIND_ALWAYS];
+/// Session kind per asset: TSLAx, NVDAx, AAPLx, XAU, GMEx.
+pub const KINDS: [u8; 5] = [KIND_EQUITY, KIND_EQUITY, KIND_EQUITY, KIND_METAL, KIND_EQUITY];
 
 const M: u16 = 60;
 const DAY: u16 = 24 * M;
@@ -128,8 +126,7 @@ pub fn in_session(asset: u8, ts: i64) -> bool {
     match KINDS.get(asset as usize) {
         Some(&KIND_EQUITY) => open_in(&EQ_WEEK, EQ_HOLIDAYS, ts),
         Some(&KIND_METAL) => open_in(&MT_WEEK, MT_HOLIDAYS, ts),
-        Some(_) => true,
-        None => false,
+        _ => false,
     }
 }
 
@@ -199,9 +196,14 @@ mod tests {
     }
 
     #[test]
-    fn the_relay_is_always_in_session() {
-        assert!(in_session(4, utc(2026, 11, 28, 12, 0)));
-        assert_eq!(session_mask(utc(2026, 11, 28, 12, 0)), 0b10000);
+    fn gmex_keeps_us_equity_hours() {
+        // Saturday: every market closed
+        assert!(!in_session(4, utc(2026, 11, 28, 12, 0)));
+        assert_eq!(session_mask(utc(2026, 11, 28, 12, 0)), 0);
+        // Tuesday 10:00 New York: the four equities and gold
+        assert_eq!(session_mask(utc(2026, 11, 24, 15, 0)), 0b11111);
+        // gold's daily break: the equities only
+        assert_eq!(session_mask(utc(2026, 11, 23, 22, 30)), 0b10111);
         assert!(!in_session(9, 0));
     }
 
