@@ -87,7 +87,7 @@ Every 10 minutes a player can open a free pack: MagicBlock's VRF draws a tier (B
 
 | | Address |
 |---|---|
-| Program | [`29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov`](https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet) |
+| Program | [`BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ`](https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet) |
 | Rollup | `https://devnet-eu.magicblock.app` (validator `MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e`, magicblock-core 2.0.4) |
 
 Every account, mint and explorer link: [DEPLOYMENTS.md](DEPLOYMENTS.md). Each climb's result screen links every transaction of that climb (Solana and rollup) to the explorer.
@@ -107,12 +107,14 @@ The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); 
 
 | Variable | What |
 |---|---|
-| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/relayer.json`), named in the relay account |
-| `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/faucet.json`) |
+| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/solana/relayer.json`), named in the relay account |
+| `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/solana/faucet.json`) |
 
 Without them the game still works: GBP/USD shows closed and new wallets need devnet SOL from faucet.solana.com.
 
-### Ops scripts (keys in `~/.config/siroclimb/`, never in the repo)
+### Ops scripts (keys in `~/.config/siroclimb/solana/`, never in the repo)
+
+Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/deployer.json`, or `SIROCLIMB_DEPLOYER`) and refuses the Solana CLI default wallet; `npm run chain:deploy` names it as payer and upgrade authority, `npm run mirrors` creates the xStock mirrors with it.
 
 | Command | |
 |---|---|
@@ -132,7 +134,7 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 |---|---|---|
 | Game rules and sessions (Rust unit) | `npm run chain:test` | 16 / 16, including 3,000 instants matched against the front's schedule reader |
 | Market hours on the built program (LiteSVM) | `npm run test:hours` | 10 / 10 |
-| On-chain battery | `npm run battery -- 24 2 2` | latest run on the upgraded program: **400 / 400**: 48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF with every payout checked, refusals, VRF packs ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
+| On-chain battery | `npm run battery -- 24 2 2` | latest run on the current deployment: **404 / 404**: 48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF with every payout checked, refusals, VRF packs ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
 | Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
