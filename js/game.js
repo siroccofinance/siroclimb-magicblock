@@ -295,6 +295,7 @@ $('#go').onclick = async () => {
     if (!api.marketOpen(C.asset)) { toast(`${byId[C.asset].ticker} is closed right now`); return; }
     if (bal < C.stake) { try { await api.faucet(); toast('Test balance topped up'); } catch (e) { toast(e.message); } return; }
     busy = true; renderGo();
+    if (!api.mock && api.walletKind() !== 'burner' && (await api.climbsLeft()) < 2) toast('Your game session needs fuel: approve one top up in your wallet');
     try { const r = await api.startRun({ mode: 'solo', assetId: C.asset, side: C.side, stake: C.stake }); enterGame(r); }
     catch (e) { toast(e.message); }
     finally { busy = false; renderGo(); }
