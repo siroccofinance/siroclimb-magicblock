@@ -310,7 +310,8 @@ pub mod siroclimb {
             }
             r.settled_ts = now; // when the draw was asked
             r.winners = [NONE; 3];
-            let allowed = open_markets & ((1u8 << ASSETS) - 1);
+            // the draw is limited to markets the caller reports live AND in session now
+            let allowed = open_markets & ((1u8 << ASSETS) - 1) & hours::session_mask(now);
             require!(allowed != 0, ClimbError::BadAsset);
             r.recorded = allowed as u32; // markets allowed in the draw, until the draw lands
         }
