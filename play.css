@@ -498,10 +498,10 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 .wallet__menu { min-width: 230px; }
 .ghost--pack[hidden] { display: none; }
 
-/* result: download the picture beside Share */
-.ghost--dl { text-decoration: none; width: 60px; padding: 0; flex: none; }
-.result .stats { column-gap: 28px; }
-.ghost--dl svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 19px; height: 19px; }
-.ghost--dl[hidden] { display: none; }
+/* result: download the picture, a small link under the buttons */
+.result .go { position: relative; }
+.dl { position: absolute; right: 0; top: calc(100% + 10px); font-size: 13px; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; }
+.dl:hover { color: var(--ink); }
+.dl[hidden] { display: none; }
 .ghost.is-busy { opacity: .7; cursor: progress; }
-@media (max-width: 767px) { #share .wide { display: none; } }
+@media (max-width: 767px) { #share .wide { display: none; } .result { padding-bottom: calc(max(var(--bottom), env(safe-area-inset-bottom, 0px)) + 24px); } }
