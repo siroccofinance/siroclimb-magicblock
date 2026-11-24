@@ -136,6 +136,7 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
   // coin
   const coin = new THREE.Group();
   const coinMat = new THREE.MeshPhysicalMaterial({ color: SIROCCO_COLORS.coin, metalness: 1, roughness: 0.3, clearcoat: 0.35, clearcoatRoughness: 0.15, envMapIntensity: G ? TH.coinEnv : 1.0 });
+  const logos = [];   // the two relief marks, turned in their face's plane every frame (see uprightLogos)
   const logoMat = new THREE.MeshPhysicalMaterial({ color: SIROCCO_COLORS.coinLogo, metalness: 1, roughness: 0.12, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: G ? TH.coinEnv + 0.1 : 1.1 });
   {
     const k = RC / 0.30, t = TC / 2, hf = t - 0.008, pts = [];
@@ -154,7 +155,7 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
     const faceZ = TC / 2 - 0.008;
     const front = new THREE.Mesh(lg, logoMat); front.position.z = faceZ; front.castShadow = true;
     const back = new THREE.Mesh(lg, logoMat); back.rotation.y = Math.PI; back.position.z = -faceZ;
-    coin.add(front, back);
+    coin.add(front, back); logos.push(front, back);
   }
   coinMat.fog = false; logoMat.fog = false; // the coin never dissolves into the terracotta
   const coinPivot = new THREE.Group(); // stands on the belt, yaw wobble applied here
@@ -254,12 +255,27 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
       camera.lookAt(v1);
       if (camera.view) { camera.view.offsetX = viewBase.x + (viewMid.x - viewBase.x) * a; camera.view.offsetY = viewBase.y + (viewMid.y - viewBase.y) * a; camera.updateProjectionMatrix(); }
     } else if (camera.view && (camera.view.offsetX !== viewBase.x || camera.view.offsetY !== viewBase.y)) { camera.view.offsetX = viewBase.x; camera.view.offsetY = viewBase.y; camera.updateProjectionMatrix(); }
+    uprightLogos();
     if (glow) glow.position.copy(coinPivot.position).add(v1.set(0.35, 0.45, -0.7));
     if (glow) glow.intensity = TH.glow[1] * (1 - 0.6 * (o.follow || 0));
     if (halo) halo.material.opacity = TH.halo * (1 - 0.5 * (o.follow || 0));
     if (halo) { v1.copy(coinPivot.position).sub(camera.position).normalize().multiplyScalar(0.9); halo.position.copy(coinPivot.position).add(v1); halo.position.y += 0.12; }
   }
   function setTime(t) { pose(loopState(t * SPEED, t)); }
+  // the coin rolls and flips, the Sirocco mark does not: each relief turns about the coin's axis so the
+  // mark's up is the screen's up (seen edge-on, where that is undefined, the face is out of sight anyway)
+  const LOGO_Q = [new THREE.Quaternion(), new THREE.Quaternion().setFromAxisAngle(AY, Math.PI)];
+  const ql = new THREE.Quaternion(), lu = new THREE.Vector3(), lv = new THREE.Vector3(), up = new THREE.Vector3();
+  function uprightLogos() {
+    camera.updateMatrixWorld();
+    up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    for (let i = 0; i < 2; i++) {
+      ql.copy(coinPivot.quaternion).multiply(coin.quaternion).multiply(LOGO_Q[i]);
+      lu.set(1, 0, 0).applyQuaternion(ql); lv.set(0, 1, 0).applyQuaternion(ql);
+      const px = up.dot(lu), py = up.dot(lv);
+      if (px * px + py * py > 1e-6) logos[i].rotation.z = Math.atan2(-px, py);
+    }
+  }
 
   // ── launch: the belt brakes, the coin settles on the centre of the box it stands on, the box dips,
   //    then springs up and tosses the coin (flipping) into the air. Times in seconds from the click.
