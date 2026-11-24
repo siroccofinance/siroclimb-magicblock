@@ -24,6 +24,9 @@ Pick **TSLAx**, **Long**, **25**. Click **Start climbing**, choose **Burner wall
 > Sirocco test dollars, and a MagicBlock session key allowed to stake for me.
 > From now on there are no more pop ups."
 
+Open the wallet menu for a second: handle, game session valid until…, fuel for
+about N climbs.
+
 ## 3. The climb on the rollup (0:50 to 1:40)
 
 The belt brakes, the coin starts climbing. Point at the leverage gauge (1x, 1.5x, 2x…),
