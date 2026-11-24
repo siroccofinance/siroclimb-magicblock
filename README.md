@@ -107,12 +107,14 @@ The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); 
 
 | Variable | What |
 |---|---|
-| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/relayer.json`), named in the relay account |
-| `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/faucet.json`) |
+| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/solana/relayer.json`), named in the relay account |
+| `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/solana/faucet.json`) |
 
 Without them the game still works: GBP/USD shows closed and new wallets need devnet SOL from faucet.solana.com.
 
-### Ops scripts (keys in `~/.config/siroclimb/`, never in the repo)
+### Ops scripts (keys in `~/.config/siroclimb/solana/`, never in the repo)
+
+Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/deployer.json`, or `SIROCLIMB_DEPLOYER`) and refuses the Solana CLI default wallet; `npm run chain:deploy` names it as payer and upgrade authority, `npm run mirrors` creates the xStock mirrors with it.
 
 | Command | |
 |---|---|
