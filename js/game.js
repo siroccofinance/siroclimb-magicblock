@@ -281,7 +281,7 @@ function renderGo() {
   else if (r.status === 'open' && !r.late && r.joinable !== false) {
     go.disabled = busy; go.textContent = busy ? 'Joining…' : api.account() && bal < r.entry ? 'Get test tokens' : `Join for ${r.entry} tUSDC`;
     meta.textContent = `Starts in ${mmss((r.startsAt - now) / 1000)}. ${pot}`;
-  } else { go.disabled = true; go.textContent = `Next round in ${mmss((r.endsAt - now) / 1000)}`; meta.textContent = 'A round is live. A new one opens every 80 seconds.'; }
+  } else { go.disabled = true; go.textContent = `Next round in ${mmss((r.endsAt - now) / 1000)}`; meta.textContent = r.unopened ? 'A new round opens every 80 seconds.' : 'A round is live. A new one opens every 80 seconds.'; }
 }
 api.onRound(r => {
   const was = round; round = r;
