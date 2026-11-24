@@ -180,7 +180,7 @@ addEventListener('click', () => { if (!walletMenu.hidden) { walletMenu.hidden = 
 
 const balEl = $('#bal'), faucetBtn = $('#faucet');
 function renderBalance(v, bump) {
-  balEl.textContent = money(v);
+  balEl.textContent = api.account() ? money(v) : '–';     // no wallet yet: no balance to show
   faucetBtn.hidden = v >= 1000;
   if (bump) { const b = balEl.parentElement; b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); }
   renderGo();
