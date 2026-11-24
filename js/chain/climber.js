@@ -2,7 +2,7 @@
 // approval), solo climbs, rounds, packs, and the permissionless follow-ups
 // (finish, settle, record) any client can push forward. Used by the front
 // (js/api.js), the in-browser practice bots, the keeper and the batteries.
-import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
+import { ComputeBudgetProgram, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, ROUND, RUN, USDC_MINT } from './config.js';
 import { decodePrice, decodeProfile, decodeRound, decodeRun } from './codec.js';
@@ -131,11 +131,19 @@ export class Climber {
     return send(this.base, [ix.settleRound(this.actor.publicKey, id, winners)], [this.actor], { label: 'settle round' });
   }
   /// Write a settled round into its players' profiles, a few per transaction.
-  async recordRound(id) {
+  /// Each profile costs about 25k compute units (PDA check, deserialize,
+  /// record, serialize): 10 per transaction ran out of the default 200k, so
+  /// it is 6 per transaction with a raised limit.
+  async recordRound(id, per = 6) {
     const r = await this.round(id);
     const todo = r.entries.filter((e) => !(r.recorded & (1 << e.index))).map((e) => e.player);
     const sigs = [];
-    for (let i = 0; i < todo.length; i += 10) sigs.push(await send(this.base, [ix.recordRound(this.actor.publicKey, id, todo.slice(i, i + 10))], [this.actor], { label: 'record round' }));
+    for (let i = 0; i < todo.length; i += per) {
+      sigs.push(await send(this.base, [
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+        ix.recordRound(this.actor.publicKey, id, todo.slice(i, i + per)),
+      ], [this.actor], { label: 'record round' }));
+    }
     return sigs;
   }
 
