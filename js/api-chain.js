@@ -474,7 +474,21 @@ export async function openPack() {
   } catch (e) { throw fail(e); }
 }
 
-export async function shareCard() { return null; }
+/// A link to the climb that just ended whose preview is its result card: the server reads the settled run
+/// from Solana and signs it (POST /api/share). Waits for the settlement; null when that does not come.
+export async function shareCard() {
+  if (!wallet) return null;
+  const player = wallet.publicKey.toBase58();
+  for (let i = 0; i < 40; i++) {                       // the settlement lands a few seconds after the result
+    await sleep(i ? 1500 : 800);
+    try {
+      const r = await fetch('/api/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ player }) });
+      if (r.status === 200) return (await r.json()).url;
+      if (r.status !== 202) return null;
+    } catch { return null; }
+  }
+  return null;
+}
 
 // test hook (not part of the contract)
 export const _debug = { bust() {}, runs, climber: () => climber };

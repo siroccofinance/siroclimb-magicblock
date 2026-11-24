@@ -1,0 +1,6 @@
+{
+  "rewrites": [{ "source": "/s/:t", "destination": "/api/s?t=:t" }],
+  "functions": {
+    "api/card.js": { "includeFiles": "assets/share/**", "memory": 1024 }
+  }
+}

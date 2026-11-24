@@ -385,7 +385,8 @@ function onEnd(res) {
   setScreen('ending');
   if (bust) { sound.bust(); haptic([30, 40, 60]); } else { sound.cash(); haptic([12, 30, 12]); }
   showResult(res);
-  card = null; wantCard = true; hideTip();
+  card = null; wantCard = true; hideTip(); $('#dl').hidden = true;
+  askLink(res);
   // stairs: the result waits for the scene (the box has pushed the coin, or the coin has fallen), wherever it ended
   if (TK) setTimeout(() => { if (screen === 'ending') setScreen('result'); }, 4000);
   else setTimeout(() => setScreen('result'), bust ? 1250 : 1350);
@@ -448,18 +449,24 @@ async function makeCard(scene) {
   };
   const blob = await toBlob(drawCard(scene, d));
   if (ended !== r || !blob) return;
-  card = { blob, src: URL.createObjectURL(blob), page: null };
-  api.shareCard(blob, r).then(u => { if (card && card.blob === blob) card.page = u; }).catch(() => {});
+  card = { blob, src: URL.createObjectURL(blob) };
+  const dl = $('#dl'); dl.href = card.src; dl.download = `siroclimb-${a.ticker}-${mine.side}.png`; dl.hidden = false;
 }
+// the hosted link: its preview is the result card, drawn by the server from the settled climb on Solana
+let link = null;
+function askLink(r) {
+  link = { r, url: null, pending: api.shareCard(null, r).catch(() => null) };
+  const l = link; l.pending.then(u => { l.url = u; });
+}
+const PLAYED_ON = 'Fully on-chain on a @magicblock Ephemeral Rollup: 120 ticks a minute, zero fees, settled on Solana.';
 function shareText() {
-  const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long';
-  const text = r.status === 'busted'
-    ? `My coin fell off the stairs at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker}. Rematch incoming 🪙`
-    : r.pnl > 0.005 ? `Climbed to ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} and cashed out ${pct(r.pnlPct)} 🪙📈\n\nCan you climb higher on Siroclimb?`
-    : `Cashed out at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} before the stairs gave way 🪙\n\nYour turn on Siroclimb`;
-  const url = (card && card.page) || location.origin + location.pathname.replace(/(play|index)\.html$/, '');
-  return { text, url };
+  const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long', at = `${levTxt(r.maxLeverage)} ${side} on ${a.ticker}`;
+  const head = r.status === 'busted' ? `My coin fell off the stairs at ${at} 🪙 Rematch incoming.`
+    : r.pnl > 0.005 ? `Climbed to ${at} and cashed out ${signed(r.pnl)} tUSDC (${pct(r.pnlPct)}) on Siroclimb 🪙\n\nCan you climb higher?`
+    : `Cashed out at ${at} before the stairs gave way 🪙\n\nYour turn on Siroclimb.`;
+  return { text: `${head}\n\n${PLAYED_ON}`, url: location.origin + location.pathname.replace(/(play|index)\.html$/, '') };
 }
+const intent = (text, url) => 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 let tipT = 0;
 function showTip(copied, href) {
@@ -477,9 +484,20 @@ $('#share').onclick = async () => {
   if (!ended) return;
   sound.tick();
   const { text, url } = shareText();
-  const href = 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
-  // hosted card: the link itself carries the picture
-  if (card && card.page) { if (!window.open(href, '_blank', 'noopener')) location.href = href; return; }
+  // the hosted link carries the picture: open the post with it (a tab opened now, so no popup blocker,
+  // pointed at X once the climb has settled and the link is signed)
+  if (link && link.r === ended && (link.url || !api.mock)) {
+    let u = link.url, w = null;
+    if (!u) {
+      w = window.open('', '_blank');
+      const btn = $('#share'); btn.classList.add('is-busy');
+      u = await Promise.race([link.pending, new Promise(r => setTimeout(() => r(null), 9000))]);
+      btn.classList.remove('is-busy');
+    }
+    if (u) { const href = intent(text, u); if (w) { w.opener = null; w.location.href = href; } else if (!window.open(href, '_blank', 'noopener')) location.href = href; return; }
+    if (w) w.close();
+  }
+  const href = intent(text, url);
   // phones: the system share sheet takes the picture and the text straight into the X app
   const file = card && new File([card.blob], 'siroclimb.png', { type: 'image/png' });
   if (file && matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {

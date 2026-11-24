@@ -499,3 +499,11 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 .wallet__who:empty { display: none; }
 .wallet__menu { min-width: 230px; }
 .ghost--pack[hidden] { display: none; }
+
+/* result: download the picture beside Share */
+.ghost--dl { text-decoration: none; width: 60px; padding: 0; flex: none; }
+.result .stats { column-gap: 28px; }
+.ghost--dl svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 19px; height: 19px; }
+.ghost--dl[hidden] { display: none; }
+.ghost.is-busy { opacity: .7; cursor: progress; }
+@media (max-width: 767px) { #share .wide { display: none; } }

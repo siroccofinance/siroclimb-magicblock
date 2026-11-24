@@ -105,6 +105,21 @@ if (FLOW === 'menu') {
   say('proof', (await pg.$$eval('#rProof a', (as) => as.map((a) => a.textContent))).join(' | '));
   await pg.screenshot({ path: 'out/ui-4result.png' });
   say('balance', await text('#bal'));
+  // share: X opens with a signed /s/ link whose page carries the result card
+  const tabP = new Promise((r) => b.once('targetcreated', r));
+  const before = errs.length;
+  await pg.click('#share');
+  const tab = await tabP;
+  let link = null;
+  await until(async () => { const m = /\/s\/([\w-]+\.[\w-]+)/.exec(decodeURIComponent(decodeURIComponent(tab.url()))); if (m) link = m[0]; return !!m; }, 60000, 'share link');
+  const page = await (await fetch(URL.replace(/\/$/, '') + link)).text();
+  const meta = (k) => (new RegExp(`(?:property|name)="${k}" content="([^"]+)"`).exec(page) || [])[1];
+  const img = await fetch(meta('og:image').replace(/^https:\/\/[^/]+/, URL.replace(/\/$/, '')));
+  say('share', link.slice(0, 40) + '…', '|', meta('twitter:card'), '|', meta('og:title'), '| card', img.status, img.headers.get('content-type'));
+  // headless Chrome gets a 403 from x.com in the tab Share opened; that tab reports into this page
+  errs.splice(before, errs.length - before, ...errs.slice(before).filter((e) => !/status of 403/.test(e)));
+  if (meta('twitter:card') !== 'summary_large_image' || img.status !== 200) errs.push('share card');
+  await pg.screenshot({ path: 'out/ui-5share.png' });
 }
 await b.close();
 say(errs.length ? `FAIL ${errs.length} console errors` : 'OK, 0 console errors');

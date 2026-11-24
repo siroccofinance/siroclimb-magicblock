@@ -90,7 +90,9 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 
 **Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
 
-**Serverless.** Nothing has to run on our side for the game to work: every step of a climb is permissionless, and the page itself pushes each one along (autopilot). The optional keeper (`npm run keeper`) only sweeps climbs left on the rollup by closed tabs. The one serverless route is a devnet SOL faucet for new wallets.
+**Serverless.** Nothing has to run on our side for the game to work: every step of a climb is permissionless, and the page itself pushes each one along (autopilot). The optional keeper (`npm run keeper`) only sweeps climbs left on the rollup by closed tabs. The serverless routes are a devnet SOL faucet for new wallets and the share cards below.
+
+**Share on X.** After a climb, Share opens X with a link like `https://siroclimb.sirocco.finance/s/<token>`. `/api/share` reads the player's run account (settled, back on Solana) and the matching record of their profile, and signs that result with a server secret; the `/s/` page carries `twitter:card = summary_large_image` and an `og:image` drawn by `/api/card` (1200 x 630 PNG: the coin, the result, return, top leverage, stake, time, market and side; SVG + Inter rendered by resvg). A card cannot claim a climb nobody played, and a changed token is refused. **Save image** downloads the in-game picture of the end of the climb. People who open the link land on the game.
 
 ## Leverage packs
 
@@ -109,20 +111,21 @@ Every account, mint and explorer link: [DEPLOYMENTS.md](DEPLOYMENTS.md). Each cl
 
 ```bash
 npm install
-npm run dev          # http://127.0.0.1:3042: the site + /api/faucet
+npm run dev          # http://127.0.0.1:3042: the site + /api/faucet, /api/share, /api/card, /s/<token>
 ```
 
 Open the page, **Start playing**, pick an open market and **Start climbing**. Connect Phantom / Solflare / Backpack on devnet, or the built-in **burner wallet** (devnet SOL comes from the site's faucet). The first climb asks for one approval; every later action is instant. `?mock` runs the old in-browser simulation, no chain. `#play` opens the lobby directly.
 
 ### Hosting (Vercel, live at https://siroclimb.sirocco.finance)
 
-The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); `api/faucet.js` is a Vercel Node function. Import the repo in Vercel with no framework preset and set one server-side environment variable:
+The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); `api/*.js` are Vercel Node functions (`vercel.json` rewrites `/s/<token>` to `api/s.js` and bundles the card fonts). Import the repo in Vercel with no framework preset and set the server-side environment variables:
 
 | Variable | What |
 |---|---|
 | `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/solana/faucet.json`) |
+| `SHARE_SECRET` | random string that signs share links (`~/.config/siroclimb/solana/share-secret.txt` for the dev server) |
 
-Without it the game still works: new wallets need devnet SOL from faucet.solana.com.
+Without them the game still works: new wallets need devnet SOL from faucet.solana.com, and Share falls back to the share sheet or the clipboard.
 
 ### Ops scripts (keys in `~/.config/siroclimb/solana/`, never in the repo)
 
@@ -149,7 +152,7 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 | Market hours and retired round slots on the built program (LiteSVM) | `npm run test:hours` | 15 / 15 |
 | Sirocco Reserve on the built program (LiteSVM) | `npm run test:reserve` | 24 / 24: the bankroll becomes the admin's shares, deposit and withdraw at the share price, 4 x stake reserved and a 3 x stake line per climb, `ReserveFull`, `NotEnoughLiquidity`, `BadShares`, settlement charges exactly the front's borrow cost, lenders' positions move with the climb, `grow_run` on an old run account |
 | On-chain battery | `npm run battery -- 24 2` | with the Sirocco Reserve (`-- 8 1`): **156 / 156**: 3 lenders deposit and withdraw at the share price, 8 simultaneous climbs on all five markets each checked for its reservation, borrow line and borrow cost, refusals, VRF packs, the reserve square at the end; solo only before it: 118 / 118; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
-| Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
+| Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, Share opens X with a signed `/s/` link (summary_large_image, card PNG 200), 0 console errors |
 | Browser, a GMEx climb | `MARKET=GMEx npm run test:ui` | GMEx card open in the lobby, climb at the GME price, cash out, 4 proof links, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
 | Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
@@ -190,8 +193,9 @@ js/chain/    isomorphic client (browser + node): config, PDAs, IDL builders, dec
              sending, session keys, wallets, handles, the reserve's math, Climber
 js/api.js    the front's contract; js/api-chain.js serves it from the chain,
              js/api-mock.js is the old simulation (?mock)
-js/game.js   screens, HUD, leverage gauge, sound, scene driving
-api/         serverless route: faucet
+js/game.js   screens, HUD, price chart, leverage gauge, sound, scene driving, share
+js/coin-face.js  the coin's face maps, drawn from the vector Sirocco mark
+api/         serverless routes: faucet, share link, share card picture and page
 ops/         setup, probes, battery, keeper, dev server, browser tests
 3d/, assets/ the Three.js scene sources, hero films, brand marks
 ```
