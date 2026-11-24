@@ -241,7 +241,7 @@ function renderLobby() {
   $('#mode').querySelectorAll('button').forEach(b => { b.disabled = !!joined && b.dataset.v !== 'round'; });
   $('#side').querySelectorAll('button').forEach(b => { b.disabled = !!joined; });
   const sel = C.mode === 'round' ? round.assetId : C.asset;
-  for (const [id, c] of Object.entries(chip)) { c.b.setAttribute('aria-pressed', String(id === sel && !(C.mode === 'round' && round.drawing))); c.b.disabled = C.mode === 'round' ? id !== sel || round.drawing : false; }
+  for (const [id, c] of Object.entries(chip)) { const unknown = C.mode === 'round' && (round.drawing || round.unopened); c.b.setAttribute('aria-pressed', String(id === sel && !unknown)); c.b.disabled = C.mode === 'round' ? id !== sel || unknown : false; }
   renderClosed();
   api.watchRounds(C.mode === 'round');
   $('#modeHint').textContent = C.mode === 'solo' ? (STAIRS ? 'The coin rolls on the live price. Leverage grows every 6 seconds.' : 'Climb at your own pace. The coin steps up every 6 seconds.')
