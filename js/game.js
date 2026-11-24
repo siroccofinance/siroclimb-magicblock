@@ -164,7 +164,7 @@ async function renderWho() {
   walletMenu.querySelectorAll('[data-chain]').forEach(b => { b.hidden = api.mock; });
   el.innerHTML = `<b>${u.name}</b>`;
   const s = await api.sessionInfo();
-  if (s) el.innerHTML = `<b>${u.name}</b>Session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${s.sol.toFixed(3)} SOL for fees`;
+  if (s) el.innerHTML = `<b>${u.name}</b>Game session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<br>Fuel for about ${Math.floor(s.sol / 0.0031)} climbs (${s.sol.toFixed(3)} SOL)`;
 }
 walletMenu.onclick = async e => {
   const act = e.target.dataset.act; walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false);
