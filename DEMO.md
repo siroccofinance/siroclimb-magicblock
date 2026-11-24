@@ -4,8 +4,7 @@ Before recording: `npm run dev` (or the hosted site), a fresh browser profile, a
 open market (stocks: Sun 20:00 to Fri 20:00 New York, closed on Thanksgiving
 until 20:00 and from 17:00 on the 27th; gold Sun 18:00 to Fri 17:00 with a
 daily hour off at 17:00). The lobby shows a
-closed market as "Closed" with when it opens. Optionally `npm run keeper` so a
-round is always open. Sound on.
+closed market as "Closed" with when it opens. Sound on.
 
 ## 1. Hook (0:00 to 0:20)
 
@@ -52,18 +51,14 @@ On the result screen, click the **Verify** links: stake + delegate (Solana), beg
 
 > "Every step is on the explorer: two transactions on Solana, two on the rollup."
 
-## 5. A round (2:00 to 2:40)
+## 5. Another market, short (2:00 to 2:40)
 
-**Play again**, switch to **Round**. The market is drawn by MagicBlock VRF. **Join for 10 tUSDC**.
+**Play again**, pick **GMEx**, **Short**, **50**. Ride it a little longer.
 
-> "Rounds put everyone on the same market for the same minute. The market was
-> picked by verifiable randomness. If nobody else is around, practice players join
-> from my own browser, with their own keypairs, and play their seat on chain."
-
-Play, cash out, show the standings and the podium payout (50 / 30 / 20).
-
-> "No server runs this round: opening, delegating, the bell, finishing and paying
-> are all permissionless, and whichever browser is open pushes them along."
+> "Five markets, all read the same way: MagicBlock's Pyth Lazer price accounts on
+> the rollup, with the US trading sessions enforced by the program itself. Every
+> step of a climb is permissionless: if I close the tab, any browser finishes and
+> settles it."
 
 ## 6. Packs and close (2:40 to 3:00)
 
@@ -72,4 +67,4 @@ Open **Leverage pack**: the VRF draws Bronze to Diamond; play the free climb.
 > "Leverage packs are free climbs on the house, drawn by MagicBlock VRF. Siroclimb:
 > real-world assets, real-time on MagicBlock, settled on Solana."
 
-Show the leaderboard (today, all time, last round), read from on-chain profiles.
+Show the leaderboard (today, all time), read from on-chain profiles.

@@ -5,18 +5,14 @@
 //
 //   init()                                   → Promise<{ user: { name }, balance }>
 //   connect() / account() / disconnect()     → wallet + session key: { address } | address | null
-//   listAssets()                             → Asset[]            { id, name, ticker, kind: 'crypto' | 'stock' }
+//   listAssets()                             → Asset[]            { id, name, ticker, kind: 'stock' | 'metal' }
 //   subscribePrice(assetId, cb)              → unsubscribe()      cb({ price, ts })
 //   history(assetId, seconds)                → [{ price, ts }]    recent ticks, oldest first
-//   rules                                    → { ladder: number[], stepEvery: s, duration: s, roundEntry, prizeSplit }
-//   startRun({ mode, assetId, side, stake }) → Promise<Run>       mode 'solo' | 'round', side 'long' | 'short'
+//   rules                                    → { ladder: number[], stepEvery: s, duration: s }
+//   startRun({ mode, assetId, side, stake }) → Promise<Run>       mode 'solo', side 'long' | 'short'
 //   onRun(runId, cb)                         → unsubscribe()      cb(RunUpdate) on every price tick
 //   cashOut(runId)                           → Promise<RunResult>
-//   currentRound()                           → Round              { id, assetId, opensAt, startsAt, endsAt, status: 'open' | 'live', players, pot, entry, joined }
-//   onRound(cb)                              → unsubscribe()      cb(Round) every second
-//   joinRound({ side })                      → Promise<Round>
-//   roundStandings(roundId)                  → Standing[]         { name, pnlPct, status, you } sorted best first
-//   leaderboard(scope)                       → Promise<Standing[]> scope 'round' | 'today' | 'all'
+//   leaderboard(scope)                       → Promise<Standing[]> scope 'today' | 'all'
 //   balance()                                → number
 //   onBalance(cb)                            → unsubscribe()
 //   faucet()                                 → Promise<number>    tops the test balance back up
@@ -27,7 +23,7 @@
 //
 // Run        { id, mode, assetId, side, stake, entryPrice, startedAt, ladder, stepEvery, duration }
 // RunUpdate  { t (s since start), price, step, leverage, value, pnl, pnlPct, risk (0..1 of the stake lost), status }
-// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice, rank?, prize? }
+// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice }
 
 // ─────────────────────────────── MOCK ───────────────────────────────
 
@@ -44,7 +40,7 @@ const ASSETS = [
   { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', p0: 27.46, vol: 0.0009 },
 ];
 
-export const rules = { ladder: [1, 1.5, 2, 2.5, 3, 3.5, 4], stepEvery: 6, duration: 60, roundEntry: 10, prizeSplit: [0.5, 0.3, 0.2] };
+export const rules = { ladder: [1, 1.5, 2, 2.5, 3, 3.5, 4], stepEvery: 6, duration: 60 };
 
 // ── prices: one random walk per asset (per-second volatility), shared clock
 const feeds = new Map();
@@ -58,7 +54,7 @@ function tick() {
     f.hist.push({ price: f.price, ts }); if (f.hist.length > 900) f.hist.shift();
     f.subs.forEach(cb => cb({ price: f.price, ts }));
   }
-  runTick(ts); roundTick(ts);
+  runTick(ts);
 }
 for (let i = 0; i < 300; i++) { const ts = Date.now() - (300 - i) * TICK_MS; for (const f of feeds.values()) { f.price *= Math.exp(f.vol * Math.sqrt(TICK_MS / 1000) * gauss()); f.hist.push({ price: f.price, ts }); } }
 setInterval(tick, TICK_MS);
@@ -127,7 +123,6 @@ function runTick(ts) {
   }
 }
 export async function startRun({ mode = 'solo', assetId, side = 'long', stake }) {
-  if (mode === 'round') throw new Error('use joinRound for rounds');
   if (!(stake > 0) || stake > bal) throw new Error('Not enough test tokens');
   setBal(bal - stake);
   const run = makeRun({ mode, assetId, side, stake }); runs.set(run.id, run);
@@ -151,7 +146,6 @@ function record(run, r) {
 }
 const NAMES = ['dune.sol', 'mistral', 'saffron', 'harmattan', 'oasis', 'zephyr', 'atlas', 'ghibli', 'khamsin', 'leveche', 'simoom', 'tramontane', 'bora', 'chinook'];
 export async function leaderboard(scope = 'today') {
-  if (scope === 'round') return lastRound ? lastRound.standings : [];
   const mine = store.get('history', []).filter(h => scope === 'all' || Date.now() - h.ts < 864e5).map(h => ({ name: 'You', pnlPct: h.pnlPct, pnl: h.pnl, you: true }));
   const seed = scope === 'all' ? 7 : new Date().getDate();
   const bots = NAMES.map((n, i) => ({ name: n, pnlPct: ((Math.sin(seed * 97 + i * 13.7) * 0.5 + 0.5) ** 2) * (scope === 'all' ? 46 : 22) + 0.4 }));
@@ -159,72 +153,6 @@ export async function leaderboard(scope = 'today') {
   return [...bots, ...best].sort((a, b) => b.pnlPct - a.pnlPct).slice(0, 12);
 }
 
-// ── rounds: every 80 s, 20 s to join then 60 s live, same asset for everyone
-const CYCLE = 80000, OPEN = 20000;
-let round = null, lastRound = null; const roundSubs = new Set();
-const hash = n => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
-function roundFor(now) {
-  const n = Math.floor(now / CYCLE), opensAt = n * CYCLE;
-  const asset = ASSETS[Math.floor(hash(n) * ASSETS.length)];
-  return { id: n, assetId: asset.id, opensAt, startsAt: opensAt + OPEN, endsAt: opensAt + OPEN + rules.duration * 1000, entry: rules.roundEntry, players: 0, pot: 0, joined: false, runs: [] };
-}
-function botStrategy(seed) {           // cash out at a profit target, a stop, or a time; some ride to the end
-  const target = 0.6 + hash(seed) * 4, stop = -2 - hash(seed + 1) * 10, until = 12 + hash(seed + 2) * 50;
-  return (t, run) => { const p = (run.value / run.stake - 1) * 100; return p >= target || p <= stop || t >= until; };
-}
-function roundTick(ts) {
-  if (round && ts >= round.endsAt && !round.paid) payRound(round);
-  if (!round || ts >= round.endsAt + 4000 || (round.id !== Math.floor(ts / CYCLE) && ts >= round.endsAt)) {
-    if (round && round.runs.length) lastRound = { id: round.id, standings: standings(round) };
-    round = roundFor(ts);
-    if (ts > round.startsAt) round.late = true;                    // page opened mid-round: watch, join the next one
-  }
-  // bots drift in while the round is open
-  if (ts < round.startsAt) {
-    const want = Math.floor(3 + hash(round.id) * 6 + ((ts - round.opensAt) / OPEN) * (4 + hash(round.id + 3) * 5));
-    while (round.runs.filter(r => r.bot).length < want && !round.late) {
-      const i = round.runs.length, s = round.id * 31 + i;
-      const run = makeRun({ mode: 'round', assetId: round.assetId, side: hash(s) > 0.5 ? 'long' : 'short', stake: round.entry, startedAt: round.startsAt, name: NAMES[(round.id + i) % NAMES.length], bot: botStrategy(s) });
-      round.runs.push(run); runs.set(run.id, run);
-    }
-  }
-  round.players = round.runs.length; round.pot = round.players * round.entry;
-  round.status = ts < round.startsAt ? 'open' : 'live';
-  if (ts >= round.endsAt && !round.paid) payRound(round);
-  if (Math.floor(ts / 1000) !== round._s) { round._s = Math.floor(ts / 1000); roundSubs.forEach(cb => cb(publicRound(round))); }
-}
-function standings(r) {
-  return r.runs.map(run => ({ name: run.name, pnlPct: (run.value / run.stake - 1) * 100, status: run.status, you: !run.bot }))
-    .sort((a, b) => b.pnlPct - a.pnlPct).map((s, i) => ({ ...s, rank: i + 1 }));
-}
-function payRound(r) {
-  r.paid = true;
-  const st = standings(r);
-  st.forEach((s, i) => { s.prize = i < rules.prizeSplit.length ? Math.round(r.pot * rules.prizeSplit[i] * 100) / 100 : 0; });
-  const me = st.find(s => s.you), myRun = r.runs.find(x => !x.bot);
-  if (me && myRun) {
-    if (me.prize) setBal(bal + me.prize);
-    myRun.result = { ...(myRun.result || { status: myRun.status, value: myRun.value, pnl: myRun.value - myRun.stake, pnlPct: me.pnlPct, maxLeverage: myRun.maxLev, duration: rules.duration, entryPrice: myRun.entryPrice, exitPrice: myRun.last }), rank: me.rank, of: st.length, prize: me.prize, final: true };
-    record(myRun, myRun.result);
-    myRun.final?.(myRun.result);
-  }
-  lastRound = { id: r.id, standings: st };
-}
-const publicRound = r => ({ id: r.id, assetId: r.assetId, opensAt: r.opensAt, startsAt: r.startsAt, endsAt: r.endsAt, status: r.status, players: r.players, pot: r.pot, entry: r.entry, joined: r.joined, late: !!r.late, runId: r.myRunId || null });
-export const currentRound = () => publicRound(round);
-export function onRound(cb) { roundSubs.add(cb); cb(publicRound(round)); return () => roundSubs.delete(cb); }
-export async function joinRound({ side = 'long' }) {
-  if (round.status !== 'open' || round.late) throw new Error('This round has started, join the next one');
-  if (round.joined) return publicRound(round);
-  if (round.entry > bal) throw new Error('Not enough test tokens');
-  setBal(bal - round.entry);
-  const run = makeRun({ mode: 'round', assetId: round.assetId, side, stake: round.entry, startedAt: round.startsAt, name: 'You' });
-  round.runs.push(run); runs.set(run.id, run); round.joined = true; round.myRunId = run.id;
-  roundTick(Date.now());
-  return publicRound(round);
-}
-export const roundStandings = () => (round ? standings(round) : []);
-export function whenRoundFinal(runId) { const run = runs.get(runId); return run.result?.final ? Promise.resolve(run.result) : new Promise(res => { run.final = res; }); }
 export function runInfo(id) { const r = runs.get(id); return r ? publicRun(r) : null; }
 
 // ── leverage packs (VRF on chain). Kept off in the UI for now.
@@ -244,4 +172,3 @@ export async function shareCard(png, result) { return null; }
 // test hook for the front (not part of the contract): force a fall on a live run
 export const _debug = { bust() { for (const r of runs.values()) if (!r.bot && r.status === 'live') r.value = -1; } };
 
-roundTick(Date.now());                          // a round exists from the first frame

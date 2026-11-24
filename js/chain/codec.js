@@ -82,34 +82,6 @@ export function decodeProfile(data) {
   return p;
 }
 
-/// Round is zero-copy (repr(C)): fixed offsets after the 8-byte discriminator.
-export const ENTRY_SIZE = 104;
-export function decodeRound(data) {
-  const d = Buffer.from(data);
-  const at = (o) => 8 + o;
-  const i64 = (o) => Number(d.readBigInt64LE(at(o)));
-  const r = {
-    id: i64(0), opensAt: i64(8), startsAt: i64(16), endsAt: i64(24), entry: i64(32), pot: i64(40), entryPrice: i64(48), lastPrice: i64(56),
-    liveTs: i64(64), lastTickTs: i64(72), taskId: i64(80), settledTs: i64(88), prizes: [i64(96), i64(104), i64(112)],
-  };
-  const E = 120, MAXP = 24, T = E + MAXP * ENTRY_SIZE;
-  r.ticks = d.readUInt32LE(at(T));
-  r.recorded = d.readUInt32LE(at(T + 4));
-  r.slot = d[at(T + 8)]; r.status = d[at(T + 9)]; r.asset = d[at(T + 10)]; r.players = d[at(T + 11)];
-  r.winners = [d[at(T + 13)], d[at(T + 14)], d[at(T + 15)]];
-  r.entries = [];
-  for (let i = 0; i < r.players; i++) {
-    const o = at(E + i * ENTRY_SIZE);
-    const nb = d.subarray(o + 80, o + 96); const z = nb.indexOf(0);
-    r.entries.push({
-      index: i, player: new PublicKey(d.subarray(o, o + 32)), session: new PublicKey(d.subarray(o + 32, o + 64)),
-      value: Number(d.readBigUInt64LE(o + 64)), endTs: Number(d.readBigInt64LE(o + 72)), name: nb.subarray(0, z < 0 ? 16 : z).toString('utf8'),
-      side: d[o + 96], status: d[o + 97], maxStep: d[o + 98],
-    });
-  }
-  return r;
-}
-
 /// A market's price account: a MagicBlock Pyth Lazer feed.
 export function decodePrice(data) {
   return decodeFeed(data);

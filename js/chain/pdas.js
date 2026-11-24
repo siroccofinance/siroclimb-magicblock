@@ -2,7 +2,7 @@
 // whole state can be found without an indexer.
 import { PublicKey } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, PROGRAM_ID, ROUND_SLOTS, SESSION_PROGRAM_ID, TOKEN_PROGRAM_ID, VRF_PROGRAM_ID } from './config.js';
+import { ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, PROGRAM_ID, SESSION_PROGRAM_ID, TOKEN_PROGRAM_ID, VRF_PROGRAM_ID } from './config.js';
 
 const pda = (seeds, program = PROGRAM_ID) => PublicKey.findProgramAddressSync(seeds, program)[0];
 const s = (t) => Buffer.from(t);
@@ -11,8 +11,7 @@ export const configPda = () => pda([s('config')]);
 export const faucetPda = (user) => pda([s('faucet'), user.toBuffer()]);
 export const profilePda = (user) => pda([s('profile'), user.toBuffer()]);
 export const runPda = (player) => pda([s('run'), player.toBuffer()]);
-export const roundSlot = (id) => Number(BigInt(id) % BigInt(ROUND_SLOTS));
-export const roundPda = (id) => pda([s('round'), Buffer.from([roundSlot(id)])]);
+/// The retired round slots (closed by `ops/close-round-slots.mjs`).
 export const roundSlotPda = (slot) => pda([s('round'), Buffer.from([slot])]);
 
 /// The identity PDA this program signs VRF requests with.

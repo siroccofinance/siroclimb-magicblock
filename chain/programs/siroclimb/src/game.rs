@@ -1,6 +1,6 @@
 //! Game state and rules, free of account plumbing so they can be unit tested
-//! on the host: the leverage ladder, how a position moves with the price, how
-//! a round ranks its players and splits its pot, profiles and leverage packs.
+//! on the host: the leverage ladder, how a position moves with the price,
+//! profiles and leverage packs.
 use anchor_lang::prelude::*;
 
 /// TSLAx, NVDAx, AAPLx, XAU (gold), GMEx, in that order everywhere.
@@ -26,10 +26,10 @@ pub const SIDE_LONG: u8 = 0;
 pub const SIDE_SHORT: u8 = 1;
 
 pub const MODE_SOLO: u8 = 0;
-pub const MODE_ROUND: u8 = 1;
+/// 1 was the retired round mode (older profile history may hold it).
 pub const MODE_PACK: u8 = 2;
 
-// Run (and round entry) status.
+// Run status.
 pub const RUN_FREE: u8 = 0;
 pub const RUN_STAKED: u8 = 1;
 pub const RUN_LIVE: u8 = 2;
@@ -37,23 +37,6 @@ pub const RUN_CASHED: u8 = 3;
 pub const RUN_BUSTED: u8 = 4;
 pub const RUN_EXPIRED: u8 = 5;
 pub const RUN_SETTLED: u8 = 6;
-
-// Round status.
-pub const ROUND_FREE: u8 = 0;
-pub const ROUND_DRAWING: u8 = 1;
-pub const ROUND_OPEN: u8 = 2;
-pub const ROUND_LIVE: u8 = 3;
-pub const ROUND_FINISHED: u8 = 4;
-pub const ROUND_SETTLED: u8 = 5;
-
-/// Rounds follow a fixed clock: round `n` opens at `n * CYCLE`, takes joins
-/// for `ROUND_JOIN_SECONDS`, then runs for `RUN_SECONDS`.
-pub const ROUND_CYCLE: i64 = 80;
-pub const ROUND_JOIN_SECONDS: i64 = 20;
-/// Round accounts are a ring of reusable slots (round `n` lives in slot `n % SLOTS`).
-pub const ROUND_SLOTS: u64 = 4;
-pub const MAX_PLAYERS: usize = 24;
-pub const PRIZE_SPLIT: [u64; 3] = [50, 30, 20];
 
 pub const NAME_LEN: usize = 16;
 pub const HISTORY: usize = 8;
@@ -104,6 +87,7 @@ pub enum ClimbError {
     TooEarly,
     #[msg("Too late")]
     TooLate,
+    // Round errors are from the retired round mode, kept so later codes do not shift.
     #[msg("Wrong round slot")]
     BadRound,
     #[msg("Round slot still in use")]
@@ -161,7 +145,7 @@ pub fn pnl_bps(value: u64, stake: u64) -> i32 {
 pub struct RunRecord {
     pub ts: i64,
     pub stake: u64,
-    /// Money won or lost: payout minus stake (solo), prize minus entry (round).
+    /// Money won or lost: payout minus stake.
     pub pnl: i64,
     /// Position result in bps of the stake.
     pub pnl_bps: i32,
@@ -170,7 +154,7 @@ pub struct RunRecord {
     pub mode: u8,
     pub status: u8,
     pub max_step: u8,
-    /// Round finish (1-based), 0 for solo.
+    /// Round finish (1-based) in the retired round mode, 0 for solo.
     pub rank: u8,
     pub players: u8,
 }
@@ -193,6 +177,7 @@ pub struct Profile {
     /// Day (unix days) of `day_best_bps`.
     pub day: u32,
     pub day_best_bps: i32,
+    /// From the retired round mode; kept so profiles keep their layout.
     pub rounds: u32,
     pub podiums: u32,
     pub wins: u32,
@@ -227,18 +212,6 @@ impl Profile {
             self.day_best_bps = r.pnl_bps;
         } else if r.pnl_bps > self.day_best_bps {
             self.day_best_bps = r.pnl_bps;
-        }
-        if r.mode == MODE_ROUND {
-            self.rounds += 1;
-            if r.rank >= 1 && r.rank <= 3 {
-                self.podiums += 1;
-            }
-            if r.rank == 1 {
-                self.wins += 1;
-            }
-            if r.pnl > -(r.stake as i64) {
-                self.prizes += (r.pnl + r.stake as i64) as u64;
-            }
         }
         self.history[self.head as usize % HISTORY] = r;
         self.head = ((self.head as usize + 1) % HISTORY) as u8;
@@ -312,164 +285,6 @@ impl Run {
     }
 }
 
-/// One player's climb inside a round.
-#[zero_copy]
-#[derive(Default, Debug, PartialEq)]
-pub struct RoundEntry {
-    pub player: Pubkey,
-    pub session: Pubkey,
-    pub value: u64,
-    pub end_ts: i64,
-    pub name: [u8; NAME_LEN],
-    pub side: u8,
-    pub status: u8,
-    pub max_step: u8,
-    pub _pad: [u8; 5],
-}
-
-/// A timed round: everyone on the same market, same entry, same 60 s.
-/// Zero-copy: with 24 seats it is too big to deserialize on the stack.
-#[account(zero_copy)]
-pub struct Round {
-    pub id: u64,
-    pub opens_at: i64,
-    pub starts_at: i64,
-    pub ends_at: i64,
-    pub entry: u64,
-    pub pot: u64,
-    pub entry_price: u64,
-    pub last_price: u64,
-    pub live_ts: i64,
-    pub last_tick_ts: i64,
-    pub task_id: i64,
-    pub settled_ts: i64,
-    pub prizes: [u64; 3],
-    pub entries: [RoundEntry; MAX_PLAYERS],
-    pub ticks: u32,
-    /// Bit i set once entry i's result is written to its profile.
-    pub recorded: u32,
-    pub slot: u8,
-    pub status: u8,
-    pub asset: u8,
-    pub players: u8,
-    pub bump: u8,
-    /// Entry index of the 1st, 2nd and 3rd place (NONE when fewer players).
-    pub winners: [u8; 3],
-}
-
-pub fn round_times(id: u64) -> (i64, i64, i64) {
-    let opens = id as i64 * ROUND_CYCLE;
-    (opens, opens + ROUND_JOIN_SECONDS, opens + ROUND_JOIN_SECONDS + RUN_SECONDS)
-}
-
-impl Round {
-    /// Reuse the slot for round `id`. Clears in place (the account is too big for the stack).
-    pub fn reset(&mut self, id: u64, entry: u64) {
-        let (o, s, e) = round_times(id);
-        self.id = id;
-        self.status = ROUND_DRAWING;
-        self.asset = NONE;
-        self.opens_at = o;
-        self.starts_at = s;
-        self.ends_at = e;
-        self.entry = entry;
-        self.pot = 0;
-        self.players = 0;
-        self.entry_price = 0;
-        self.last_price = 0;
-        self.live_ts = 0;
-        self.last_tick_ts = 0;
-        self.ticks = 0;
-        self.recorded = 0;
-        self.winners = [NONE; 3];
-        self.prizes = [0; 3];
-        self.task_id = 0;
-        self.settled_ts = 0;
-        for x in self.entries.iter_mut() {
-            *x = RoundEntry::default();
-        }
-    }
-
-    #[cfg(test)]
-    pub fn blank() -> Round {
-        // Plain old data: all zeroes is a valid free slot.
-        unsafe { std::mem::zeroed() }
-    }
-
-    pub fn index_of(&self, player: &Pubkey) -> Option<usize> {
-        self.entries[..self.players as usize].iter().position(|e| e.player == *player)
-    }
-
-    pub fn session_index(&self, signer: &Pubkey) -> Option<usize> {
-        self.entries[..self.players as usize].iter().position(|e| e.session == *signer || e.player == *signer)
-    }
-
-    /// Move every live climb to `price` at `now`; at the bell the rest expire.
-    pub fn advance(&mut self, price: u64, now: i64) {
-        if self.status != ROUND_LIVE {
-            return;
-        }
-        let t = (now - self.live_ts).min(RUN_SECONDS);
-        let step = step_at(t, TOP_STEP);
-        let over = now >= self.live_ts + RUN_SECONDS;
-        for e in self.entries[..self.players as usize].iter_mut() {
-            if e.status != RUN_LIVE {
-                continue;
-            }
-            e.value = moved(e.value, LADDER[step as usize], e.side, BOOST[self.asset as usize], self.last_price, price);
-            e.max_step = e.max_step.max(step);
-            if e.value == 0 {
-                e.status = RUN_BUSTED;
-                e.end_ts = now;
-            } else if over {
-                e.status = RUN_EXPIRED;
-                e.end_ts = self.live_ts + RUN_SECONDS;
-            }
-        }
-        self.last_price = price;
-        self.last_tick_ts = now;
-        self.ticks += 1;
-        if over {
-            self.status = ROUND_FINISHED;
-            self.rank();
-        }
-    }
-
-    /// Order the field by final position (ties: who joined first) and fix the prizes.
-    pub fn rank(&mut self) {
-        let n = self.players as usize;
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by(|a, b| self.entries[*b].value.cmp(&self.entries[*a].value).then(a.cmp(b)));
-        let paid = n.min(3);
-        let total: u64 = PRIZE_SPLIT[..paid].iter().sum();
-        let mut left = self.pot;
-        self.winners = [NONE; 3];
-        self.prizes = [0; 3];
-        for (k, idx) in order.iter().take(paid).enumerate() {
-            let p = if k + 1 == paid { left } else { self.pot * PRIZE_SPLIT[k] / total };
-            left -= p;
-            self.winners[k] = *idx as u8;
-            self.prizes[k] = p;
-        }
-    }
-
-    /// 1-based finish of entry `i` (all entries ranked by value).
-    pub fn place_of(&self, i: usize) -> u8 {
-        let v = self.entries[i].value;
-        let ahead = self.entries[..self.players as usize]
-            .iter()
-            .enumerate()
-            .filter(|(j, e)| e.value > v || (e.value == v && *j < i))
-            .count();
-        (ahead + 1) as u8
-    }
-
-    pub fn prize_of(&self, i: usize) -> u64 {
-        self.winners.iter().position(|w| *w as usize == i).map(|k| self.prizes[k]).unwrap_or(0)
-    }
-}
-
-/// Pick a pack tier from 32 bytes of randomness.
 pub fn pack_tier_from(randomness: &[u8; 32]) -> u8 {
     let r = (u64::from_le_bytes(randomness[..8].try_into().unwrap()) % 100) as u8;
     let mut acc = 0u8;
@@ -561,61 +376,6 @@ mod tests {
         assert_eq!(r.payout_for(), 2_000_000);
         r.value = 7_000_000;
         assert_eq!(r.payout_for(), 0);
-    }
-
-    fn round_with(values: &[u64]) -> Round {
-        let mut r = Round::blank();
-        r.reset(10, 10_000_000);
-        r.status = ROUND_LIVE;
-        r.asset = 0;
-        r.players = values.len() as u8;
-        r.pot = 10_000_000 * values.len() as u64;
-        for (i, v) in values.iter().enumerate() {
-            r.entries[i].value = *v;
-            r.entries[i].status = RUN_CASHED;
-        }
-        r
-    }
-
-    #[test]
-    fn round_splits_the_pot_50_30_20() {
-        let mut r = round_with(&[9, 12, 11, 15, 3]);
-        r.rank();
-        assert_eq!(r.winners, [3, 1, 2]);
-        assert_eq!(r.prizes, [25_000_000, 15_000_000, 10_000_000]);
-        assert_eq!(r.place_of(3), 1);
-        assert_eq!(r.place_of(4), 5);
-        assert_eq!(r.prize_of(1), 15_000_000);
-        assert_eq!(r.prize_of(0), 0);
-    }
-
-    #[test]
-    fn small_rounds_renormalise_and_ties_go_to_the_first_joiner() {
-        let mut r = round_with(&[5]);
-        r.rank();
-        assert_eq!(r.prizes[0], 10_000_000);
-        let mut r = round_with(&[7, 7]);
-        r.rank();
-        assert_eq!(r.winners[..2], [0, 1]);
-        assert_eq!(r.prizes[0] + r.prizes[1], 20_000_000);
-        assert_eq!(r.prizes[0], 12_500_000);
-        assert_eq!(r.place_of(1), 2);
-    }
-
-    #[test]
-    fn round_advance_ends_at_the_bell() {
-        let mut r = round_with(&[10_000_000, 10_000_000]);
-        r.entries[0].status = RUN_LIVE;
-        r.entries[1].status = RUN_LIVE;
-        r.entries[1].side = SIDE_SHORT;
-        r.live_ts = 100;
-        r.last_price = 1_000_000;
-        r.advance(1_001_000, 101);
-        assert!(r.entries[0].value > r.entries[1].value);
-        r.advance(1_001_000, 160);
-        assert_eq!(r.status, ROUND_FINISHED);
-        assert_eq!(r.entries[0].status, RUN_EXPIRED);
-        assert_eq!(r.winners[0], 0);
     }
 
     #[test]

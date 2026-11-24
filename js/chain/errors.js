@@ -16,12 +16,8 @@ const FRIENDLY = {
   RunInProgress: 'Your previous climb is still settling, one moment',
   StalePrice: 'This market is closed right now, pick another one',
   MarketClosed: 'This market is outside its trading hours, pick another one',
-  TooLate: 'This round has started, join the next one',
-  RoundFull: 'This round is full, join the next one',
-  AlreadyJoined: "You're already in this round",
   PackCooldown: 'Next pack in a few minutes',
   NoPack: 'No pack to play',
-  SlotBusy: 'The next round is still being set up',
 };
 
 export function friendlyError(e) {

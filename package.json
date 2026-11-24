@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "node --no-deprecation ops/dev-server.mjs",
     "test:solo": "node tests/app.mjs . out 1440 900 d solo",
-    "test:round": "node tests/round.mjs . out",
     "test:intro": "node tests/intro.mjs . out",
     "test:ends": "node tests/ends.mjs . out",
     "build:vendor": "esbuild js/vendor/entry.mjs --bundle --format=esm --platform=browser --minify --target=es2020 --define:global=globalThis --outfile=js/vendor/solana.mjs --legal-comments=none",

@@ -1,6 +1,6 @@
 // On-chain battery on devnet + the rollup with many concurrent players.
 //
-//   node ops/battery.mjs [players=24] [rounds=2] [soloWaves=2]
+//   node ops/battery.mjs [players=24] [soloWaves=2]
 //
 // Players are keypairs under ~/.config/siroclimb/battery/ with realistic
 // handles, funded by the admin key, onboarded with a MagicBlock session key
@@ -10,26 +10,23 @@
 //                checked from stake to settlement (balances, profile, state
 //                committed back to Solana equal to the rollup's).
 //   refusals     what must fail does, with the expected program error.
-//   rounds       the whole field joins the same round (a full 24-seat round),
-//                plays it on the rollup, and the pot split is checked.
 //   packs        concurrent VRF pack draws, then the free climbs they give.
 // Writes BATTERY.md; every bug it finds goes to FINDINGS.md.
 import fs from 'fs';
 import path from 'path';
 import { Keypair, SystemProgram } from '@solana/web3.js';
 import { Climber, readPrice } from '../js/chain/climber.js';
-import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, ROUND, ROUND_CYCLE, RUN, LADDER } from '../js/chain/config.js';
+import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, RUN, LADDER } from '../js/chain/config.js';
 import { decodeRun } from '../js/chain/codec.js';
 import { ix } from '../js/chain/ix.js';
-import { profilePda, runPda, roundPda } from '../js/chain/pdas.js';
+import { profilePda, runPda } from '../js/chain/pdas.js';
 import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
 import { uniqueHandles } from '../js/chain/handles.js';
 import { KEY_DIR, adminKeypair, baseConnection, erConnection, namedKeypair, short } from './lib/env.mjs';
 
 const N = Number(process.argv[2] || 24);
-const ROUNDS = Number(process.argv[3] || 2);
-const WAVES = Number(process.argv[4] || 2);
+const WAVES = Number(process.argv[3] || 2);
 const base = baseConnection(), er = erConnection(), admin = adminKeypair();
 const T0 = Date.now();
 const say = (...a) => console.log(`[${((Date.now() - T0) / 1000).toFixed(0).padStart(4)}s]`, ...a);
@@ -79,6 +76,9 @@ const saveSess = (w, s) => fs.writeFileSync(sessFile(w), JSON.stringify({ secret
 // Top-up of the players' SOL (session-key fuel); lower both on a tight deployer budget.
 const FUND_MIN = Number(process.env.BATTERY_FUND_MIN || 0.03) * 1e9;
 const FUND_AMOUNT = Number(process.env.BATTERY_FUND_AMOUNT || 0.075) * 1e9;
+// Session-key fuel (each climb's delegation costs about 0.003 SOL), topped up from the player's wallet.
+const SESSION_MIN = Number(process.env.BATTERY_SESSION_MIN || 0.03) * 1e9;
+const SESSION_TOP_UP = Number(process.env.BATTERY_SESSION_TOP_UP || 0.04) * 1e9;
 async function fundAll() {
   const need = [];
   for (const w of wallets) if ((await base.getBalance(w.publicKey)) < FUND_MIN) need.push(w);
@@ -90,7 +90,7 @@ async function fundAll() {
 }
 
 const adminStart = await base.getBalance(admin.publicKey);
-say(`battery: ${N} players (+1 spare), ${WAVES} solo waves, ${ROUNDS} rounds, program ${short(PROGRAM_ID)}`);
+say(`battery: ${N} players (+1 spare), ${WAVES} solo waves, program ${short(PROGRAM_ID)}`);
 say('funded', await fundAll(), 'players');
 const climbers = wallets.map((w) => new Climber({ base, er, wallet: w, session: loadSess(w) }));
 await Promise.all(climbers.map(async (c, i) => {
@@ -102,7 +102,7 @@ await Promise.all(climbers.map(async (c, i) => {
   // A session's SOL goes to the delegation fee of each climb: keep it fueled.
 }));
 await Promise.all(climbers.map(async (c) => {
-  if ((await base.getBalance(c.session.keypair.publicKey)) < 0.03e9) await c.topUpSession(0.04e9);
+  if ((await base.getBalance(c.session.keypair.publicKey)) < SESSION_MIN) await c.topUpSession(SESSION_TOP_UP);
   if ((await c.usdc()) < 300) await c.faucet().catch(() => {});
 }));
 const field = climbers.slice(0, N), spare = climbers[N];
@@ -189,80 +189,6 @@ for (let w = 1; w <= WAVES; w++) {
   await refuse(tag, 'faucet twice in a row', 6006, async () => { await c.faucet().catch(() => {}); await c.faucet(); });
 }
 
-// ------------------------------------------------------------------ rounds
-let lastRoundId = 0;
-async function playRound(k) {
-  const markets = await openMarkets();
-  if (!markets.length) { say('every market is closed: skipping rounds'); return; }
-  const now = () => Date.now() / 1000;
-  let id = Math.max(Math.floor(now() / ROUND_CYCLE) + 1, lastRoundId + 1);
-  lastRoundId = id;
-  const opens = id * ROUND_CYCLE, starts = opens + 20, tag = `round ${id}`;
-  while (now() < opens - 25) await sleep(500);
-  const mask = markets.reduce((m, i) => m | (1 << i), 0);
-  await refuse(tag, 'open with no market', 6007, () => send(base, [ix.openRound(field[0].actor.publicKey, id, 0)], [field[0].actor], { label: 'nomask', attempts: 1 }));
-  await timed('open round + VRF request (Solana)', () => field[0].openRound(id, mask));
-  const tv = Date.now();
-  let r;
-  for (;;) { r = await field[0].round(id); if (r && r.status === ROUND.OPEN) break; if (Date.now() - tv > 20000) break; await sleep(250); }
-  lat.set('round market VRF callback', [...(lat.get('round market VRF callback') || []), Date.now() - tv]);
-  check(tag, 'VRF drew an open market', r && r.status === ROUND.OPEN && markets.includes(r.asset), r ? `asset ${r.asset}` : 'no callback');
-  if (!r || r.status !== ROUND.OPEN) return;
-  while (now() < opens) await sleep(200);
-  const before = await Promise.all(field.map(usdcOf));
-  const sides = field.map(() => pick(['long', 'short']));
-  const joins = await Promise.allSettled(field.map(async (c, i) => { await sleep(rnd(0, 3000)); return timed('join (Solana)', () => c.joinRound(id, sides[i])); }));
-  const joined = joins.filter((j) => j.status === 'fulfilled').length;
-  check(tag, `all ${field.length} players seated at once`, joined === field.length, `${joined} seated; ${joins.filter((j) => j.status === 'rejected').map((j) => j.reason.message.slice(0, 60)).slice(0, 2).join(' | ')}`);
-  if (field.length >= 24) await refuse(tag, 'a 25th seat', 6019, () => spare.joinRound(id, 'long'));
-  await refuse(tag, 'the same player twice', 6020, () => F(2).joinRound(id, 'long'));
-  await refuse(tag, 'delegate before the bell', 6015, () => send(base, [ix.delegateRound(F(1).actor.publicKey, id)], [F(1).actor], { label: 'early', attempts: 1 }));
-  r = await field[0].round(id);
-  check(tag, 'pot = entries', r.pot === r.players * 10 * ONE_USDC, `${r.players} players pot ${r.pot / 1e6}`);
-  while (now() < starts) await sleep(200);
-  // the devnet clock runs a second or two behind the wall clock: wait for it
-  for (;;) { const t = await base.getBlockTime(await base.getSlot()).catch(() => 0); if (t >= starts) break; await sleep(400); }
-  await refuse(tag, 'join after the bell', 6016, () => spare.joinRound(id, 'long'));
-  await timed('delegate round (Solana)', () => F(3).delegateRound(id));
-  await timed('go live + crank (rollup)', () => F(4).goLive(id, r.asset));
-  r = await field[0].round(id);
-  check(tag, 'every seat live at the same entry', r.status === ROUND.LIVE && r.entryPrice > 0 && r.entries.every((e) => e.status === RUN.LIVE), `status ${r.status}`);
-  // cash outs at random moments; a third ride to the bell
-  await Promise.allSettled(field.map(async (c, i) => {
-    if (Math.random() < 0.33) return;
-    await sleep(rnd(2000, 50000));
-    await timed('round cash out (rollup)', () => c.cashOutRound(id, r.asset)).catch(() => {});
-  }));
-  await refuse(tag, 'cash out by a stranger', 6021, () => send(er, [ix.cashOutRound(spare.actor.publicKey, id, r.asset)], [spare.actor], { label: 'stranger', attempts: 1 }));
-  for (;;) { r = await field[0].round(id); if (r.status !== ROUND.LIVE) break; await sleep(1000); }
-  check(tag, 'ended by the crank at the bell', r.status === ROUND.FINISHED, `status ${r.status}, ${r.ticks} ticks`);
-  const vals = r.entries.map((e) => e.value);
-  const order = vals.map((v, i) => i).sort((a, b) => vals[b] - vals[a] || a - b);
-  check(tag, 'podium = best three positions', JSON.stringify(r.winners.slice(0, Math.min(3, r.players))) === JSON.stringify(order.slice(0, 3)), `${r.winners} vs ${order.slice(0, 3)}`);
-  check(tag, 'prizes 50/30/20 sum to the pot', r.prizes.reduce((a, b) => a + b, 0) === r.pot, r.prizes.map((p) => p / 1e6).join('/'));
-  // every step from here is permissionless: another client (a browser's autopilot,
-  // the keeper) may take it first, which is fine as long as the round moves on
-  const orDone = async (fn, done) => { try { await fn(); } catch (e) { if (!(await done())) throw e; } };
-  const now2 = async () => (await F(0).round(id)) || {};
-  await timed('finish round + commit/undelegate (rollup)', () => orDone(() => F(5).finishRound(id, r.asset), async () => (await now2()).layer !== 'er'));
-  await timed('round back on Solana', () => F(5).waitOnBase(roundPda(id)));
-  await timed('settle round (Solana)', () => orDone(() => F(6).settleRound(id), async () => (await now2()).status === ROUND.SETTLED));
-  await timed('record profiles (6 per tx)', () => orDone(() => F(7).recordRound(id), async () => { const x = await now2(); return x.recorded === 2 ** x.players - 1; }));
-  r = await field[0].round(id);
-  check(tag, 'settled and every profile recorded', r.status === ROUND.SETTLED && r.recorded === 2 ** r.players - 1, `recorded ${r.recorded.toString(2)}`);
-  const after = await Promise.all(field.map(usdcOf));
-  let ok = 0;
-  field.forEach((c, i) => {
-    const j = r.entries.findIndex((e) => e.player.equals(c.me)); if (j < 0) return;
-    const k2 = r.winners.indexOf(j), prize = k2 >= 0 ? r.prizes[k2] : 0;
-    if (after[i] - before[i] === prize - 10 * ONE_USDC) ok++;
-  });
-  check(tag, 'every balance moved by prize minus entry', ok === r.players, `${ok}/${r.players}`);
-  say(`round ${id} on ${MARKETS[r.asset].id}: ${r.players} players, ${r.ticks} ticks, podium ${r.winners.map((w) => r.entries[w].name).join(' / ')}`);
-  return r;
-}
-for (let k = 0; k < ROUNDS; k++) await playRound(k).catch((e) => check('round', 'round completed', false, e.message.slice(0, 200)));
-
 // ------------------------------------------------------------------- packs
 {
   const markets = await openMarkets();
@@ -292,9 +218,7 @@ const adminEnd = await base.getBalance(admin.publicKey);
 const passed = checks.filter((c) => c.ok).length;
 const med = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 const statuses = results.reduce((m, r) => ((m[r.status] = (m[r.status] || 0) + 1), m), {});
-const md = `# Battery report
-
-Run ${new Date(T0).toISOString()} · program \`${PROGRAM_ID.toBase58()}\` · rollup ${er.rpcEndpoint} · ${N} players · ${WAVES} solo waves · ${ROUNDS} rounds · ${Math.round((Date.now() - T0) / 1000)} s
+const md = `Run ${new Date(T0).toISOString()} · program \`${PROGRAM_ID.toBase58()}\` · rollup ${er.rpcEndpoint} · ${N} players · ${WAVES} solo waves · ${Math.round((Date.now() - T0) / 1000)} s
 
 **${passed} / ${checks.length} checks passed.** Admin SOL ${(adminStart / 1e9).toFixed(4)} -> ${(adminEnd / 1e9).toFixed(4)} (funding players).
 
@@ -312,6 +236,10 @@ ${[...lat.entries()].map(([k, v]) => `| ${k} | ${v.length} | ${med(v)} | ${Math.
 
 ${checks.map((c) => `- ${c.ok ? 'PASS' : 'FAIL'} [${c.tag}] ${c.name}${c.detail ? ` — ${c.detail}` : ''}`).join('\n')}
 `;
-fs.writeFileSync(new URL('../BATTERY.md', import.meta.url), md);
+// BATTERY.md keeps its header and run table; this run replaces the latest run section.
+const file = new URL('../BATTERY.md', import.meta.url);
+const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '# Battery report\n\n';
+const cut = prev.indexOf('\n## Run ');
+fs.writeFileSync(file, `${cut < 0 ? prev.trimEnd() + '\n' : prev.slice(0, cut + 1)}\n## Run ${process.env.BATTERY_RUN || 'latest'}\n\n${md}`);
 say(`${passed}/${checks.length} checks passed; BATTERY.md written`);
 process.exit(0);

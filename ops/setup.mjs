@@ -1,11 +1,11 @@
 // One-time devnet setup (idempotent): test-USDC mint (authority = config PDA),
-// house vault (token account owned by config), config, house bankroll, round
-// slots. Writes js/chain/deployment.js for the front and the scripts.
+// house vault (token account owned by config), config, house bankroll.
+// Writes js/chain/deployment.js for the front and the scripts.
 import fs from 'fs';
 import { Keypair, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { PROGRAM_ID, ROUND_SLOTS, TOKEN_PROGRAM_ID, USDC_DECIMALS } from '../js/chain/config.js';
-import { configPda, roundSlotPda } from '../js/chain/pdas.js';
+import { PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_DECIMALS } from '../js/chain/config.js';
+import { configPda } from '../js/chain/pdas.js';
 import { ix } from '../js/chain/ix.js';
 import { decodeConfig } from '../js/chain/codec.js';
 import { send } from '../js/chain/tx.js';
@@ -63,10 +63,5 @@ const want = Number(process.env.HOUSE_BANKROLL || 5_000_000);
 if (Number(vaultBal.value.uiAmount) < want / 2) {
   const sig = await send(conn, [ix2.fundHouse(admin.publicKey, BigInt(want) * 1_000_000n, mintKey, vaultKey)], [admin], { label: 'fund house' });
   console.log('house funded with', want, 'tUSDC', sig);
-}
-for (let slot = 0; slot < ROUND_SLOTS; slot++) {
-  if (await conn.getAccountInfo(roundSlotPda(slot))) continue;
-  const sig = await send(conn, [ix2.initRoundSlot(admin.publicKey, slot)], [admin], { label: `round slot ${slot}` });
-  console.log('round slot', slot, roundSlotPda(slot).toBase58(), sig);
 }
 console.log('setup done');

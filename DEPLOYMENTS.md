@@ -11,17 +11,17 @@ Everything below was created and is paid for by Siroclimb's own deployer, `DnSHP
 | Program `siroclimb` | [`BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ`](https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet) |
 | Config PDA `["config"]` | [`2BwybAfVsxnhGKshVA3SuebZ4tASCwWoKBn9N2eum9Y9`](https://explorer.solana.com/address/2BwybAfVsxnhGKshVA3SuebZ4tASCwWoKBn9N2eum9Y9?cluster=devnet) |
 | Sirocco test USDC (tUSDC, 6 decimals, mint authority = config) | [`4nkq8Ef2EfWkZ7LnF1MzH6YAV8cDGiQdePtKKr2UBAwo`](https://explorer.solana.com/address/4nkq8Ef2EfWkZ7LnF1MzH6YAV8cDGiQdePtKKr2UBAwo?cluster=devnet) |
-| House vault (bankroll + round pots, owned by config) | [`Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4`](https://explorer.solana.com/address/Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4?cluster=devnet) |
-| Round slot 0 `["round", 0]` | [`J93gViLDAvQLDnbvq2TZHKkteMZvjgajUQr2DrJkZDyw`](https://explorer.solana.com/address/J93gViLDAvQLDnbvq2TZHKkteMZvjgajUQr2DrJkZDyw?cluster=devnet) |
-| Round slot 1 | [`FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy`](https://explorer.solana.com/address/FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy?cluster=devnet) |
-| Round slot 2 | [`3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv`](https://explorer.solana.com/address/3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv?cluster=devnet) |
-| Round slot 3 | [`BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4`](https://explorer.solana.com/address/BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4?cluster=devnet) |
+| House vault (bankroll, owned by config) | [`Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4`](https://explorer.solana.com/address/Hn8FYbEy8dm9gMwjCKChJF2ooQxF1EFhHZrGD3qxRGx4?cluster=devnet) |
+| Round slot 0 (retired, closed 24 Nov 2026) | `J93gViLDAvQLDnbvq2TZHKkteMZvjgajUQr2DrJkZDyw` |
+| Round slot 1 (retired, closed 24 Nov 2026) | `FwHt7mEXBtzRykz62897Gu9ce7pFdwjD3HoKHCpeNrvy` |
+| Round slot 2 (retired, closed 24 Nov 2026) | `3sCza4CFkJQxsTepoFZ5LfiyA5ywnic31EgLu2g1XbCv` |
+| Round slot 3 (retired, closed 24 Nov 2026) | `BLyuHprNhznES6QoJHMmz8Jdag7p7XzizxRx1dgY4of4` |
 | VRF request identity `["identity"]` | `CeEPZEQLFiVQJ6RyKjTr6j4JAiJGkqUy3xFBNwVHh94J` |
 | Site faucet key (devnet SOL for new wallets) | `A6koh5fTipjQLyVzJWB4fFwcivBF1G3w4e9KvmxfwTHH` |
 
 Per player: profile `["profile", wallet]`, run `["run", wallet]` (one, reused climb after climb), faucet claim `["faucet", signer]`, session token `["session_token_v2", program, session key, wallet]` of the session-keys program.
 
-While a climb or a round is live its account reads as owned by the delegation program (`DELeGG…`) on Solana: that is what a delegated account looks like. Its live state is on the rollup (explorer: custom cluster `https://devnet-eu.magicblock.app`).
+While a climb is live its account reads as owned by the delegation program (`DELeGG…`) on Solana: that is what a delegated account looks like. Its live state is on the rollup (explorer: custom cluster `https://devnet-eu.magicblock.app`).
 
 ## Markets
 
@@ -49,7 +49,7 @@ Pyth Lazer feed accounts are PDAs `["price_feed", "pyth-lazer", id]` of MagicBlo
 
 ## Battery players
 
-The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan156, nvidiasmith24, bora692, …) are new keypairs under `~/.config/siroclimb/solana/battery/`, funded only by the deployer; their profiles, climbs and round seats are on chain and fill the public leaderboard. Latest run: 404 / 404 checks on this deployment ([BATTERY.md](BATTERY.md)).
+The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan156, nvidiasmith24, bora692, …) are new keypairs under `~/.config/siroclimb/solana/battery/`, funded only by the deployer; their profiles and climbs are on chain and fill the public leaderboard. Latest run: 118 / 118 checks on the solo-only program ([BATTERY.md](BATTERY.md)).
 
 ## Integration proof (explorer)
 
@@ -71,3 +71,4 @@ The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan15
 | 24 Nov 2026 | Upgrade in place: market hours on chain (`hours.rs`). `start_run` and `begin_run` refuse a market outside its New York sessions (`MarketClosed` 6026), round draws only among markets in session. Upgrade tx `Xr6HKAHjT71GYrcYqjLLFnACiX58Gic9JjszxopJ8KSLykruXS1pybrVzvxRKCvYffMu5FJhjFS1k1mWewxiZha` |
 | 24 Nov 2026 | **Fresh deployment from Siroclimb's own deployer** `DnSHPS8X…`: new program id `BS6874Pq…` (tx `3LL2Yxtr…`), new config, mint, vault, slots, relay, mirrors and keys. The previous program `29sucV8a…` (deployed with another project's wallet) was closed and its rent, and the leftover SOL of its faucet, relay, keeper, house and battery keys, returned to that wallet; its keys are retired. |
 | 24 Nov 2026 | Upgrade in place: **GMEx (GameStop xStock) replaces GBP/USD** at market index 4, read from MagicBlock's Pyth Lazer GME feed (1160) like the other stocks, US equity sessions on chain, boost 55. The relay instructions and `RelayFeed` account type are gone; the old relay account `2k53rB3b…` stays delegated on the rollup, unused. Config, mint, vault, round slots and profiles unchanged (profiles that recorded a GBP/USD climb now show it as GMEx). Upgrade tx [`5zWs3RLT…`](https://explorer.solana.com/tx/5zWs3RLT6HkkJnmeUs99BagQqisvDYEhoQRN4Xf41zr1GfJdXn1jXmsTHsJiU3Ke8MfmndpdvrCQbh1iv7PCbvfs?cluster=devnet) |
+| 24 Nov 2026 | Upgrade in place: **solo only**. The round instructions and the `Round` account type are gone (binary 543 KB to 436 KB); `close_round_slot` (admin, idle slots only) closed the four round slots and returned 0.056 SOL of rent to the deployer. Profiles keep their round counters (layout unchanged); the config's `rounds` counter stays. Upgrade tx [`4hGTZC7o…`](https://explorer.solana.com/tx/4hGTZC7oiWbeJJVAjCDFXqLB25PoVwPDFfrNQEujeBWRpvLYEFT4JeYkw1SrFf8xG9voyJjH73Q189t8MCJ2nf6U?cluster=devnet); slots closed in [`5zapYBhh…`](https://explorer.solana.com/tx/5zapYBhhfESHD3CoehTFuKNY6JLy4ZxZRjNHBuc1mwrAv2ESEBR7joaFeESNvq3hto98eH92Kn7CfmBc2T9cBtEi?cluster=devnet), [`2T9F3HDA…`](https://explorer.solana.com/tx/2T9F3HDAR9UcuBSn3CHN8duRCF7svHf3aFkMfWaqG2fZh8VRCggvErXWJsxwHECWD6NFiWZy82jxRE6EwpumEAyF?cluster=devnet), [`2Z9ktERq…`](https://explorer.solana.com/tx/2Z9ktERqe4SoswvZtwJ7yDDKoSbN7Ujjafbz1YULa5yCaJAeh1dnSq433QPwEkPacoX2ebWg7eauEeqBY7RxyzSf?cluster=devnet), [`LwZE8arv…`](https://explorer.solana.com/tx/LwZE8arv5nvtXgbJ7yJFynJGNScQmmGUnksoHrZdpj7NKed9SfJMwjRCLReHFB4vcM87dUZ5zHfZ6AWnt3EPLCc?cluster=devnet) |

@@ -15,16 +15,11 @@
 //   marketOpensAt(assetId)                  → ms | null          next session start of a closed market
 //   subscribePrice(assetId, cb)              → unsubscribe()      cb({ price, ts })
 //   history(assetId, seconds)                → [{ price, ts }]    recent ticks, oldest first
-//   rules                                    → { ladder: number[], stepEvery: s, duration: s, roundEntry, prizeSplit }
+//   rules                                    → { ladder: number[], stepEvery: s, duration: s }
 //   startRun({ mode, assetId, side, stake, pack }) → Promise<Run> mode 'solo', side 'long' | 'short', pack: play the leverage pack
 //   onRun(runId, cb)                         → unsubscribe()      cb(RunUpdate) on every price tick
 //   cashOut(runId)                           → Promise<RunResult>
-//   currentRound()                           → Round              { id, assetId, drawing, opensAt, startsAt, endsAt, status: 'open' | 'live', players, pot, entry, joined, late, runId }
-//   onRound(cb)                              → unsubscribe()      cb(Round) every second
-//   watchRounds(on)                          → void               the player looks at rounds: this browser may open the next one
-//   joinRound({ side })                      → Promise<Round>
-//   roundStandings(roundId)                  → Standing[]         { name, pnlPct, status, you } sorted best first
-//   leaderboard(scope)                       → Promise<Standing[]> scope 'round' | 'today' | 'all'
+//   leaderboard(scope)                       → Promise<Standing[]> scope 'today' | 'all'
 //   balance()                                → number
 //   onBalance(cb)                            → unsubscribe()
 //   faucet()                                 → Promise<number>    tops the test balance back up
@@ -37,7 +32,7 @@
 //
 // Run        { id, mode, assetId, side, stake, entryPrice, startedAt, ladder, stepEvery, duration }
 // RunUpdate  { t (s since start), price, step, leverage, value, pnl, pnlPct, risk (0..1 of the stake lost), status }
-// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice, rank?, prize? }
+// RunResult  { status: 'cashed' | 'busted' | 'expired', value, pnl, pnlPct, maxLeverage, duration (s), entryPrice, exitPrice }
 
 const MOCK = new URLSearchParams(location.search).has('mock');
 const impl = MOCK ? await import('./api-mock.js') : await import('./api-chain.js');
@@ -63,12 +58,6 @@ export const cashOut = (...a) => impl.cashOut(...a);
 export const runResult = (...a) => impl.runResult(...a);
 export const whenEnded = (...a) => impl.whenEnded(...a);
 export const runInfo = (...a) => impl.runInfo(...a);
-export const currentRound = () => impl.currentRound();
-export const onRound = (...a) => impl.onRound(...a);
-export const watchRounds = opt('watchRounds', () => {});
-export const joinRound = (...a) => impl.joinRound(...a);
-export const roundStandings = (...a) => impl.roundStandings(...a);
-export const whenRoundFinal = (...a) => impl.whenRoundFinal(...a);
 export const leaderboard = (...a) => impl.leaderboard(...a);
 export const balance = () => impl.balance();
 export const onBalance = (...a) => impl.onBalance(...a);
