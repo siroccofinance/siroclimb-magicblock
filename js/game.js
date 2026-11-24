@@ -458,13 +458,13 @@ function askLink(r) {
   link = { r, url: null, pending: api.shareCard(null, r).catch(() => null) };
   const l = link; l.pending.then(u => { l.url = u; });
 }
+const PLAYED_ON = 'Fully on-chain on a @magicblock Ephemeral Rollup: 120 ticks a minute, zero fees, settled on Solana.';
 function shareText() {
-  const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long';
-  const text = r.status === 'busted'
-    ? `My coin fell off the stairs at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker}. Rematch incoming 🪙`
-    : r.pnl > 0.005 ? `Climbed to ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} and cashed out ${pct(r.pnlPct)} 🪙📈\n\nCan you climb higher on Siroclimb?`
-    : `Cashed out at ${levTxt(r.maxLeverage)} going ${side} on ${a.ticker} before the stairs gave way 🪙\n\nYour turn on Siroclimb`;
-  return { text, url: location.origin + location.pathname.replace(/(play|index)\.html$/, '') };
+  const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long', at = `${levTxt(r.maxLeverage)} ${side} on ${a.ticker}`;
+  const head = r.status === 'busted' ? `My coin fell off the stairs at ${at} 🪙 Rematch incoming.`
+    : r.pnl > 0.005 ? `Climbed to ${at} and cashed out ${signed(r.pnl)} tUSDC (${pct(r.pnlPct)}) on Siroclimb 🪙\n\nCan you climb higher?`
+    : `Cashed out at ${at} before the stairs gave way 🪙\n\nYour turn on Siroclimb.`;
+  return { text: `${head}\n\n${PLAYED_ON}`, url: location.origin + location.pathname.replace(/(play|index)\.html$/, '') };
 }
 const intent = (text, url) => 'https://x.com/intent/post?' + new URLSearchParams({ text, url }).toString();
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
