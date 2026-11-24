@@ -123,7 +123,8 @@ pub mod siroclimb {
     }
 
     /// Close a round slot left from the retired round mode and hand its rent
-    /// back to the admin. Only an idle slot (free or settled) on Solana.
+    /// back to the admin. Only an idle slot on Solana: free, settled, or
+    /// opened with nobody seated.
     pub fn close_round_slot(ctx: Context<CloseRoundSlot>, slot: u8) -> Result<()> {
         let r = &ctx.accounts.round;
         require_keys_eq!(*r.owner, crate::ID, ClimbError::BadRound);
@@ -131,8 +132,9 @@ pub mod siroclimb {
             let data = r.try_borrow_data()?;
             require!(data.len() > ROUND_STATUS_AT, ClimbError::BadRound);
             require!(data[ROUND_STATUS_AT - 1] == slot, ClimbError::BadRound);
-            let status = data[ROUND_STATUS_AT];
-            require!(status == 0 || status == 5, ClimbError::SlotBusy);
+            // free or settled, or opened / drawing with nobody seated (no pot)
+            let (status, players) = (data[ROUND_STATUS_AT], data[ROUND_STATUS_AT + 2]);
+            require!(status == 0 || status == 5 || (status <= 2 && players == 0), ClimbError::SlotBusy);
         }
         let admin = ctx.accounts.admin.to_account_info();
         **admin.try_borrow_mut_lamports()? += r.lamports();
