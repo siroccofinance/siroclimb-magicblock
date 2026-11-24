@@ -38,7 +38,7 @@ pub mod token;
 use game::*;
 use token::*;
 
-declare_id!("29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov");
+declare_id!("BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ");
 
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const FAUCET_SEED: &[u8] = b"faucet";
@@ -80,7 +80,7 @@ pub const FEEDS: [Pubkey; ASSETS] = [
     pubkey!("3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC"),
     pubkey!("B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1"),
     pubkey!("9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn"),
-    pubkey!("83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21"),
+    pubkey!("2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr"),
 ];
 pub const RELAY_SEED: &[u8] = b"relay";
 /// A price older than this does not move a climb (it holds still), and a

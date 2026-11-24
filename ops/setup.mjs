@@ -61,7 +61,7 @@ const { ix: ix2 } = await import('../js/chain/ix.js?with-deployment');
 const vaultBal = await conn.getTokenAccountBalance(vaultKey);
 const want = Number(process.env.HOUSE_BANKROLL || 5_000_000);
 if (Number(vaultBal.value.uiAmount) < want / 2) {
-  const sig = await send(conn, [ix2.fundHouse(admin.publicKey, BigInt(want) * 1_000_000n)], [admin], { label: 'fund house' });
+  const sig = await send(conn, [ix2.fundHouse(admin.publicKey, BigInt(want) * 1_000_000n, mintKey, vaultKey)], [admin], { label: 'fund house' });
   console.log('house funded with', want, 'tUSDC', sig);
 }
 for (let slot = 0; slot < ROUND_SLOTS; slot++) {

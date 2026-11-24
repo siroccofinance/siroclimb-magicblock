@@ -48,13 +48,13 @@ export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawom
 /// shows as closed.
 export const MARKETS = [
   { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', lazerId: 1435, exponent: -5, feed: '8L7ccCxTBZaLsMMdhAod5fFnpdEWGSDPW4y1td7y3y8N', hours: 'us-equity',
-    mint: '9p4P41Ad8jFEVZsehjt6mjyg6uhsZkouoAesnGb7mPcU', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
+    mint: 'EwksJmGYpSHWwznpeX8XGqHPBEhqyH4nHX92WH7uUz8g', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
   { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', lazerId: 1314, exponent: -5, feed: '3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC', hours: 'us-equity',
-    mint: 'E4XAzgHmwAcZ1ajUfUdkDUPCen6CutyXZk218F5623WG', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
+    mint: '4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', lazerId: 922, exponent: -5, feed: 'B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1', hours: 'us-equity',
-    mint: 'DsPehKph9sP6FXAQTQSuZj6Us8XcKk9YKXt8LWfkAoW', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
+    mint: 'yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
   { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', lazerId: 346, exponent: -3, feed: '9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn', hours: 'metal' },
-  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', lazerId: 333, exponent: -5, feed: '83aBQdu2PkVcuw8NUg6nnvSGgX13jvdCE7LidgNcUw21', hours: 'fx', relay: true },
+  { id: 'GBPUSD', name: 'British pound', ticker: 'GBP/USD', kind: 'fx', lazerId: 333, exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: 'fx', relay: true },
 ].map((m, index) => ({ ...m, index, feedKey: new PublicKey(m.feed) }));
 export const RELAY_ASSET = 4;
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);

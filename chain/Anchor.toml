@@ -7,11 +7,11 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-siroclimb = "29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov"
+siroclimb = "BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ"
 
 [programs.devnet]
-siroclimb = "29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov"
+siroclimb = "BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ"
 
 [provider]
 cluster = "devnet"
-wallet = "~/.config/solana/id.json"
+wallet = "~/.config/siroclimb/solana/deployer.json"
