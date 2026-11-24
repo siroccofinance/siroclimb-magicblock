@@ -149,7 +149,7 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
     add(0.252, t); add(0.246, t - 0.001); add(0.238, hf);
     const g = new THREE.LatheGeometry(pts, 160); g.rotateX(Math.PI / 2);
     const body = new THREE.Mesh(g, coinMat); body.castShadow = true; body.receiveShadow = true; coin.add(body);
-    // the faces close the rim's ring
+    // the faces close the rim's ring; they counter-rotate as the coin rolls, so the mark stays upright
     const fg = new THREE.CircleGeometry(0.238 * k, 160);
     const front = new THREE.Mesh(fg, faceMat); front.position.z = hf;
     const back = new THREE.Mesh(fg, faceMat); back.rotation.y = Math.PI; back.position.z = -hf;
@@ -254,12 +254,28 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
       camera.lookAt(v1);
       if (camera.view) { camera.view.offsetX = viewBase.x + (viewMid.x - viewBase.x) * a; camera.view.offsetY = viewBase.y + (viewMid.y - viewBase.y) * a; camera.updateProjectionMatrix(); }
     } else if (camera.view && (camera.view.offsetX !== viewBase.x || camera.view.offsetY !== viewBase.y)) { camera.view.offsetX = viewBase.x; camera.view.offsetY = viewBase.y; camera.updateProjectionMatrix(); }
+    uprightFaces();
     if (glow) glow.position.copy(coinPivot.position).add(v1.set(0.35, 0.45, -0.7));
     if (glow) glow.intensity = TH.glow[1] * (1 - 0.6 * (o.follow || 0));
     if (halo) halo.material.opacity = TH.halo * (1 - 0.5 * (o.follow || 0));
     if (halo) { v1.copy(coinPivot.position).sub(camera.position).normalize().multiplyScalar(0.9); halo.position.copy(coinPivot.position).add(v1); halo.position.y += 0.12; }
   }
   function setTime(t) { pose(loopState(t * SPEED, t)); }
+  // the coin rolls and flips, the Sirocco mark does not: each face turns in its own plane so the mark's
+  // up is the screen's up (seen edge-on, where that is undefined, the face is out of sight anyway)
+  const FACE_Q = [new THREE.Quaternion(), new THREE.Quaternion().setFromAxisAngle(AY, Math.PI)];
+  const qf = new THREE.Quaternion(), fu = new THREE.Vector3(), fv = new THREE.Vector3(), up = new THREE.Vector3();
+  function uprightFaces() {
+    camera.updateMatrixWorld();
+    up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    for (let i = 0; i < 2; i++) {
+      qf.copy(coinPivot.quaternion).multiply(coin.quaternion).multiply(FACE_Q[i]);
+      fu.set(1, 0, 0).applyQuaternion(qf); fv.set(0, 1, 0).applyQuaternion(qf);
+      const px = up.dot(fu), py = up.dot(fv);
+      if (px * px + py * py > 1e-6) faces[i].rotation.z = Math.atan2(-px, py);
+    }
+  }
+
   // ── launch: the belt brakes, the coin settles on the centre of the box it stands on, the box dips,
   //    then springs up and tosses the coin (flipping) into the air. Times in seconds from the click.
   const L = { TS: 0.42, TA: 0.16, TL: 0.30, LIFT: 0.95, G: 9, V0: 6.2, FLIP: 2.4, FOLLOW_T: 0.75, DOLLY: 0.55 };
