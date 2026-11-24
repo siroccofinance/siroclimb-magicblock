@@ -156,7 +156,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 ## Known gaps
 
 - **GBP/USD trust.** The relay is one named key fed from Kraken. MagicBlock has no FX feed on its rollups and our Pyth key is not entitled to FX; with an FX entitlement the relay would post signed Pyth Lazer updates instead.
-- **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. Keeping a player's run account delegated between climbs would remove it; not done for the hackathon.
+- **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. The front funds the session key in proportion to the wallet (up to about 60 climbs) and shows the fuel left in the wallet menu; keeping a player's run delegated between climbs would remove the cost and is left for after the hackathon.
 - **Not hosted.** The repo is Vercel-ready (static site + two functions) but not deployed.
 
 ## Repository
