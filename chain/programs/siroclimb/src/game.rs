@@ -124,6 +124,8 @@ pub enum ClimbError {
     PackCooldown,
     #[msg("Crank scheduling failed")]
     Crank,
+    #[msg("This market is outside its trading sessions")]
+    MarketClosed,
 }
 
 /// The ladder step at `t` seconds into a climb, capped at `top`.

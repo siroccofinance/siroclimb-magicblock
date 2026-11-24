@@ -33,6 +33,7 @@ use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlo
 use session_keys::SessionTokenV2;
 
 pub mod game;
+pub mod hours;
 pub mod token;
 use game::*;
 use token::*;
@@ -186,6 +187,7 @@ pub mod siroclimb {
         authorize(&signer, &player, &ctx.accounts.session_token, now)?;
         require!((asset as usize) < ASSETS, ClimbError::BadAsset);
         require!(side <= SIDE_SHORT, ClimbError::BadSide);
+        require!(hours::in_session(asset, now), ClimbError::MarketClosed);
         let run = &mut ctx.accounts.run;
         require!(run.status == RUN_FREE || run.status == RUN_SETTLED, ClimbError::RunInProgress);
 
@@ -308,7 +310,8 @@ pub mod siroclimb {
             }
             r.settled_ts = now; // when the draw was asked
             r.winners = [NONE; 3];
-            let allowed = open_markets & ((1u8 << ASSETS) - 1);
+            // the draw is limited to markets the caller reports live AND in session now
+            let allowed = open_markets & ((1u8 << ASSETS) - 1) & hours::session_mask(now);
             require!(allowed != 0, ClimbError::BadAsset);
             r.recorded = allowed as u32; // markets allowed in the draw, until the draw lands
         }
@@ -557,6 +560,8 @@ pub mod siroclimb {
         require!(signer == run.session || signer == run.player || now > run.created_ts + BEGIN_GRACE, ClimbError::Unauthorized);
         let (price, ts) = read_feed(&ctx.accounts.feed, run.asset)?;
         require!(now - ts <= MAX_PRICE_AGE, ClimbError::StalePrice);
+        // Pyth keeps publishing a frozen price while a market is closed.
+        require!(hours::in_session(run.asset, now), ClimbError::MarketClosed);
         run.entry_price = price;
         run.last_price = price;
         run.start_ts = now;

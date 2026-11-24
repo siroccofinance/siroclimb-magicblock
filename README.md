@@ -49,7 +49,7 @@ A round is the same with one account for the whole field: `open_round` asks Magi
 | Gold (XAU/USD) | Pyth Lazer metal feed on the rollup | Sun 18:00 to Fri 17:00 New York, with a daily hour off |
 | GBP/USD | The program's `RelayFeed` account on the rollup | Pushed every second by the relay key (`/api/relay`, keeper) from Kraken's public GBP/USD book, which trades every day |
 
-Outside its sessions a market shows **closed** in the lobby and rounds do not draw it. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program refuses to start a climb on a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends only GBP/USD plays.
+Outside its sessions a market shows **closed** in the lobby and rounds do not draw it. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`), and round draws only among markets in session. It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends only GBP/USD plays.
 
 Why a relay for GBP/USD: MagicBlock's rollups carry no FX feed (checked on devnet-eu, -as and -us), Pyth's devnet push account was 16 minutes stale, and our Pyth key is not entitled to FX. The relay is honest about its trust: one named key, prices only move forward, and swapping in signed Pyth Lazer FX updates is a one-function change once entitled.
 
@@ -121,13 +121,15 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | `npm run battery -- 24 2 2` | on-chain battery: players, rounds, solo waves ([BATTERY.md](BATTERY.md)) |
 | `npm run test:ui` | the real front in headless Chrome (`FLOW=round`, `pack`, `menu`; `FRESH=1` from an empty burner) |
 | `npm run ci` | every CI step, locally |
+| `npm run test:hours` | the on-chain market hours in LiteSVM (after `npm run chain:build`) |
 | `npm run keeper` | optional keeper: relay, rounds, house players, sweeper |
 
 ## Tests and results
 
 | Suite | Command | Result |
 |---|---|---|
-| Game rules (Rust unit) | `npm run chain:test` | 10 / 10 |
+| Game rules and sessions (Rust unit) | `npm run chain:test` | 16 / 16, including 3,000 instants matched against the front's schedule reader |
+| Market hours on the built program (LiteSVM) | `npm run test:hours` | 10 / 10 |
 | On-chain battery, solo | `npm run battery -- 24 2 2` | 48 simultaneous climbs by 24 session-keyed players, refusals, VRF packs: 338 / 342 (the 4 failures: one stuck round slot, fixed) |
 | On-chain battery, rounds | `npm run battery -- 24 2 0` | two full 24-seat rounds drawn by VRF, every payout checked: 66 / 67 (one test bug, fixed) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, 0 console errors |
@@ -154,7 +156,6 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 
 ## Known gaps
 
-- **Market hours on chain.** The program enforces price freshness, not trading sessions: someone calling it directly could start a climb on a closed market's frozen price. The front, keeper and battery never do. Enforcing Pyth's schedules on chain is the next step.
 - **GBP/USD trust.** The relay is one named key fed from Kraken. MagicBlock has no FX feed on its rollups and our Pyth key is not entitled to FX; with an FX entitlement the relay would post signed Pyth Lazer updates instead.
 - **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. Keeping a player's run account delegated between climbs would remove it; not done for the hackathon.
 - **Not hosted.** The repo is Vercel-ready (static site + two functions) but not deployed.
