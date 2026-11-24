@@ -87,7 +87,7 @@ Every 10 minutes a player can open a free pack: MagicBlock's VRF draws a tier (B
 
 | | Address |
 |---|---|
-| Program | [`29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov`](https://explorer.solana.com/address/29sucV8aHGufy1AWrKzgp9gBPRHBG9jSxAsSWXe7M2ov?cluster=devnet) |
+| Program | [`BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ`](https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet) |
 | Rollup | `https://devnet-eu.magicblock.app` (validator `MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e`, magicblock-core 2.0.4) |
 
 Every account, mint and explorer link: [DEPLOYMENTS.md](DEPLOYMENTS.md). Each climb's result screen links every transaction of that climb (Solana and rollup) to the explorer.
