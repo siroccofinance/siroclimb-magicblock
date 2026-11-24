@@ -458,7 +458,9 @@ function shownRoundId(now = Date.now()) {
 function publicRound(id = shownRoundId()) {
   const r = chainRounds.get(id);
   const opensAt = id * CYC, startsAt = opensAt + ROUND_JOIN_SECONDS * 1000, endsAt = startsAt + RUN_SECONDS * 1000, now = Date.now();
-  const drawing = !r || r.status === ROUND.DRAWING || r.asset === NONE;
+  // the VRF draw is pending (or about to be asked); a round nobody opened is not "drawing"
+  const unopened = !r && now >= startsAt - 4000;
+  const drawing = !unopened && (!r || r.status === ROUND.DRAWING || r.asset === NONE);
   if (r && r.asset !== NONE) lastAsset = MARKETS[r.asset].id;
   const mine = myIndex(r);
   const joinable = r && r.status === ROUND.OPEN && r.layer === 'base' && now < startsAt - 1500;
@@ -466,7 +468,8 @@ function publicRound(id = shownRoundId()) {
     id, assetId: drawing ? lastAsset : MARKETS[r.asset].id, drawing, opensAt, startsAt, endsAt,
     status: now < startsAt ? 'open' : 'live', players: r ? r.players : 0, pot: r ? r.pot / ONE_USDC : 0, entry: ROUND_ENTRY,
     joined: mine >= 0, late: mine < 0 && now >= startsAt - 1500, joinable: !!joinable || (!r && now < startsAt - 4000),
-    runId: mine >= 0 ? `round:${id}` : null, chainStatus: r ? r.status : null,
+    runId: mine >= 0 ? `round:${id}` : null, chainStatus: r ? r.status : null, unopened,
+    marketsOpen: openMask() !== 0,
   };
 }
 let lastSecond = 0;
