@@ -164,7 +164,7 @@ async function renderWho() {
   walletMenu.querySelectorAll('[data-chain]').forEach(b => { b.hidden = api.mock; });
   el.innerHTML = `<b>${u.name}</b>`;
   const s = await api.sessionInfo();
-  if (s) el.innerHTML = `<b>${u.name}</b>Session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${s.sol.toFixed(3)} SOL for fees`;
+  if (s) el.innerHTML = `<b>${u.name}</b>Game session until ${new Date(s.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<br>Fuel for about ${Math.floor(s.sol / 0.0031)} climbs (${s.sol.toFixed(3)} SOL)`;
 }
 walletMenu.onclick = async e => {
   const act = e.target.dataset.act; walletMenu.hidden = true; walletBtn.setAttribute('aria-expanded', false);
@@ -295,6 +295,7 @@ $('#go').onclick = async () => {
     if (!api.marketOpen(C.asset)) { toast(`${byId[C.asset].ticker} is closed right now`); return; }
     if (bal < C.stake) { try { await api.faucet(); toast('Test balance topped up'); } catch (e) { toast(e.message); } return; }
     busy = true; renderGo();
+    if (!api.mock && api.walletKind() !== 'burner' && (await api.climbsLeft()) < 2) toast('Your game session needs fuel: approve one top up in your wallet');
     try { const r = await api.startRun({ mode: 'solo', assetId: C.asset, side: C.side, stake: C.stake }); enterGame(r); }
     catch (e) { toast(e.message); }
     finally { busy = false; renderGo(); }

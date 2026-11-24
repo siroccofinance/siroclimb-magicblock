@@ -149,6 +149,15 @@ async function fundSol(min) {
   throw new Error(`This wallet needs a little devnet SOL (${(min / 1e9).toFixed(2)}). Get some at faucet.solana.com, then try again`);
 }
 
+/// How much SOL the session key gets: each climb's delegation costs about
+/// 0.003 SOL of rollup fees (FINDINGS #4), so a wallet that can afford it
+/// funds up to 0.2 SOL (about 60 climbs) and is not asked again for hours;
+/// a fresh wallet still starts with the 0.05 SOL minimum (about 15 climbs).
+async function fuelAmount() {
+  const have = await base.getBalance(wallet.publicKey);
+  return Math.max(SESSION_TOP_UP, Math.min(200_000_000, Math.floor((have - 30_000_000) / 2)));
+}
+
 /// Profile, test USDC and a live session key: the one wallet approval.
 async function ensureReady() {
   if (climber.hasSession && profile) return;
@@ -157,7 +166,7 @@ async function ensureReady() {
     profile = await climber.profile();
     if (climber.hasSession && profile) return;
     await fundSol(SESSION_TOP_UP + 15_000_000);
-    await climber.onboard({ name: profile ? profile.name : handleFor(account()) });
+    await climber.onboard({ name: profile ? profile.name : handleFor(account()), topUp: await fuelAmount() });
     saveSession(wallet.publicKey, climber.session);
     profile = await climber.profile();
     await refreshBalance();
@@ -169,7 +178,13 @@ async function ensureFuel() {
   const s = await base.getBalance(climber.session.keypair.publicKey);
   if (s >= 6_000_000) return;
   await fundSol(SESSION_TOP_UP + 5_000_000);
-  await climber.topUpSession(SESSION_TOP_UP);
+  await climber.topUpSession(await fuelAmount());
+}
+
+/// Climbs the session key can still pay for (about 0.003 SOL each).
+export async function climbsLeft() {
+  if (!climber || !climber.session) return 0;
+  return Math.floor((await base.getBalance(climber.session.keypair.publicKey)) / 3_100_000);
 }
 
 export async function connect(id) {
