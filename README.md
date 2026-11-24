@@ -135,6 +135,7 @@ Without them the game still works: GBP/USD shows closed and new wallets need dev
 | Browser, round with practice players | `FLOW=round npm run test:ui` | joined, 3 practice players seated, cashed out, finished 1st of 4, 20 tUSDC prize paid, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
 | Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
+| UX tour (screenshots) | `node ops/test/ux-tour.mjs` | landing, lobby, wallet chooser and menu, round lobby, closed markets (clock on a Saturday), mobile; 0 page errors |
 | Simulation flows (`?mock`) | `npm run test:solo` etc. | the original Puppeteer flows of the front |
 
 Bugs the tests found and how each was fixed: [FINDINGS.md](FINDINGS.md).
