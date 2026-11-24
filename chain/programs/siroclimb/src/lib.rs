@@ -33,6 +33,7 @@ use magicblock_magic_program_api::{args::ScheduleTaskArgs, instruction::MagicBlo
 use session_keys::SessionTokenV2;
 
 pub mod game;
+pub mod hours;
 pub mod token;
 use game::*;
 use token::*;
