@@ -96,4 +96,5 @@ The 24 battery players (realistic handles: mistrallynx, candleowl24, harmattan15
 | GMEx (18,000) | [`HjbcBwua…`](https://explorer.solana.com/address/HjbcBwuahA7NSH62EUYjuQWetSRj1LVcBkKboVRTrqf2?cluster=devnet) | [`ChgxMZmc…`](https://explorer.solana.com/address/ChgxMZmcMoyumXMy1SEagdGBEb7NVXcr1qpzkVCwRWMH?cluster=devnet) |
 
 Each climb's escrow is the run PDA's Token-2022 account for the market token (`escrowOf(player, mint)` in `js/chain/pdas.js`); the result screen links it.
+| 25 Nov 2026 | Upgrade in place: **`rescue_run`** for run accounts of an older layout left on the rollup, and the one-time setup instructions removed (559 KB). Upgrade tx [`yjnfc5he…`](https://explorer.solana.com/tx/yjnfc5heq93xC1VQUzKmSq1jh797zkFvsV7xFJRMSVfmYvh1UJpdQQk9P6AaQdALAnYgkq5exwtGaTvyevf4Vbh?cluster=devnet). The two stuck runs rescued and settled (players `DqmTDGo3…`, 92.77 tUSDC paid back, and `APo8EXPU…`). |
 

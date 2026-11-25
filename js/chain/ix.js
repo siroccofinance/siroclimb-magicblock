@@ -56,12 +56,7 @@ const validatorMeta = (v = ER_VALIDATOR) => [{ pubkey: v, isSigner: false, isWri
 
 export const ix = {
   // ----------------------------------------------------------- Solana (base)
-  initialize: (admin, usdcMint, vault) => build('initialize', { admin, usdc_mint: usdcMint, vault }),
-  fundHouse: (admin, amount, usdcMint = mint(), vault = VAULT) => build('fund_house', { admin, usdc_mint: usdcMint, vault }, { amount }),
-  /// Close a retired round slot, its rent back to the admin.
   // ------------------------------------------------- Sirocco Reserve (lending pool)
-  /// Open the reserve: the vault's tUSDC becomes the admin's lender position.
-  initReserve: (admin, vault = VAULT) => build('init_reserve', { admin, lender: lenderPda(admin), vault }),
   /// Lend `amount` (raw tUSDC) for shares; the wallet or its session key signs.
   deposit: (signer, owner, amount, sessionToken = null) =>
     build('deposit', { signer, owner, lender: lenderPda(owner), owner_usdc: ataOf(owner, mint()), vault: VAULT, session_token: sessionToken }, { amount }),
@@ -70,7 +65,6 @@ export const ix = {
     build('withdraw', { signer, owner, lender: lenderPda(owner), owner_usdc: ataOf(owner, mint()), vault: VAULT, session_token: sessionToken }, { shares }),
   /// Bring a run account written before the reserve to the current layout.
   growRun: (payer, player) => build('grow_run', { payer, run: runPda(player), player }),
-  closeRoundSlot: (admin, slot) => build('close_round_slot', { admin, round: roundSlotPda(slot) }, { slot }),
   /// `owner`: whose token account receives the top up (a session key claims for its wallet).
   faucet: (user, owner = user) => build('faucet', { user, claim: faucetPda(user), usdc_mint: mint(), user_usdc: ataOf(owner, mint()) }),
   initProfile: (user, name) => build('init_profile', { user, profile: profilePda(user) }, { name }),
@@ -95,18 +89,9 @@ export const ix = {
   openPosition: (signer, player, asset) => build('open_position', { signer, player, run: runPda(player), vault: VAULT, ...positionAccounts(player, asset) }),
 
   // ------------------------------------------------- the Sirocco desk (admin, relay)
-  initDesk: (admin, spreadBps, mints, decimals, relayer) => build('init_desk', { admin }, { spread_bps: spreadBps, mints, decimals, relayer }),
-  setDesk: (admin, spreadBps, mints, decimals) => build('set_desk', { admin }, { spread_bps: spreadBps, mints, decimals }),
   pushQuotes: (relayer, prices, ts) => build('push_quotes', { relayer }, { prices, ts }),
   fundDesk: (admin, amount) => build('fund_desk', { admin, usdc_mint: mint(), desk_usdc: ataOf(deskPda(), mint()) }, { amount }),
 
-  initRelay: (admin, market, exponent, relayer) => build('init_relay', { admin, relay: relayPda(market) }, { market, exponent, relayer }),
-  delegateRelay: (admin, market, validator) => {
-    const relay = relayPda(market);
-    return build('delegate_relay', {
-      admin, relay, buffer_relay: bufferPda(relay), delegation_record_relay: delegationRecordPda(relay), delegation_metadata_relay: delegationMetadataPda(relay),
-    }, { market }, validatorMeta(validator));
-  },
 
   openPack: (payer, player, sessionToken = null) => build('open_pack', { payer, player, profile: profilePda(player), session_token: sessionToken }),
 
@@ -115,6 +100,8 @@ export const ix = {
   pushPrice: (relayer, market, price, publishTs) => build('push_price', { relayer, relay: relayPda(market) }, { price, publish_ts: publishTs }),
   tickRun: (player, asset) => build('tick_run', { run: runPda(player), feed: feedOf(asset) }),
   cashOut: (payer, player, asset) => build('cash_out', { payer, run: runPda(player), feed: feedOf(asset) }),
+  /// End a run account of an older layout left on the rollup (the program can no longer read it as a Run).
+  rescueRun: (payer, player) => build('rescue_run', { payer, run: runPda(player) }),
   finishRun: (payer, player, asset) => build('finish_run', { payer, run: runPda(player), feed: feedOf(asset) }),
 };
 

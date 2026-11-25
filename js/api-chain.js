@@ -17,9 +17,9 @@ import {
   RUN, RUN_SECONDS, STEP_SECONDS, PACK, VAULT, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
-import { decodeDesk, decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
+import { decodeDesk, decodeQuotes, decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
-import { ata22Of, ataOf, deskPda, escrowOf, lendPda, reservePda, runPda } from './chain/pdas.js';
+import { ata22Of, ataOf, deskPda, escrowOf, lendPda, quotesPda, reservePda, runPda } from './chain/pdas.js';
 import { errorCode, send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor } from './chain/handles.js';
@@ -393,6 +393,22 @@ async function resumeMyRun() {
   } catch (e) { log('resume', e.message); }
 }
 
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+/// The Solana quotes a position opens at must be under 30 s old: if they are older than 15 s, ask the relay
+/// to push now and wait for them (a few seconds), else say so plainly.
+async function freshQuotes() {
+  const age = async () => { const a = await base.getAccountInfo(quotesPda()).catch(() => null); return a ? Date.now() / 1000 - decodeQuotes(a.data).ts : Infinity; };
+  if ((await age()) < 15) return;
+  log('quotes', 'stale, asking the relay');
+  notice('Fetching the live price on Solana…');
+  const t = Date.now();
+  while (Date.now() - t < 12000) {
+    await fetch(RELAY_URL, { method: 'POST' }).catch(() => {});
+    if ((await age()) < 25) return;
+    await sleep(1500);
+  }
+  throw new Error('The live price is not reaching Solana right now, try again in a few seconds');
+}
 export async function startRun({ mode = 'solo', assetId, side = 'long', stake, pack = false }) {
   if (!climber) await connect();
   const asset = marketIndex(assetId);
@@ -402,7 +418,9 @@ export async function startRun({ mode = 'solo', assetId, side = 'long', stake, p
     await ensureReady();
     await ensureFuel();
     // whatever the last climb left behind (closed tab, a cash out that never landed, a refused begin): end it first
-    await climber.recover((m) => { log('recover', m); notice(m); });
+    await withTimeout(climber.recover((m) => { log('recover', m); notice(m); }), 80000, 'Your previous climb is still settling, try again in a minute');
+    // the position opens at the relay's price on Solana: make sure it is fresh before staking
+    await freshQuotes();
     let res;
     try { res = await climber.startRun({ asset, side, stake: pack ? 0 : stake, usePack: !!pack }); }
     catch (e) {

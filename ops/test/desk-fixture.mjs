@@ -34,10 +34,45 @@ export function setupDesk(svm, send, admin, { inventory = 10n ** 15n, usdc = 10_
     svm.setAccount(ata22Of(lendPda(), m.mintKey), { lamports: Number(rent(165)), data: tokenAccount(m.mintKey, lendPda(), inventory), owner: TOKEN_2022_PROGRAM_ID, executable: false });
   }
   svm.setAccount(ataOf(deskPda(), USDC_MINT), { lamports: Number(rent(165)), data: tokenAccount(USDC_MINT, deskPda(), usdc), owner: TOKEN_PROGRAM_ID, executable: false });
-  const r = send([ix.initDesk(admin.publicKey, DESK_SPREAD_BPS, MARKETS.map((m) => m.mintKey), MARKETS.map((m) => m.decimals), relayer.publicKey)], [admin]);
-  return { relayer, ok: r.ok, logs: r.logs };
+  writeDesk(svm, admin.publicKey, relayer.publicKey);
+  void send;
+  return { relayer, ok: !!svm.getAccount(deskPda()), logs: [] };
 }
 
 export function pushQuotes(send, relayer, ts, prices = PRICES) {
   return send([ix.pushQuotes(relayer.publicKey, prices, BigInt(ts))], [relayer]);
+}
+
+// ---------------------------------------------------------------- program state
+// The deployed program no longer carries its one-time setup instructions (initialize, init_reserve,
+// init_desk...: removed after setup to keep the binary small), so the tests write that state directly,
+// byte for byte as those instructions did.
+import { PublicKey as PK } from '@solana/web3.js';
+import { PROGRAM_ID, VAULT } from '../../js/chain/config.js';
+import { discriminator } from '../../js/chain/codec.js';
+import { configPda, lenderPda, quotesPda, reservePda } from '../../js/chain/pdas.js';
+
+const bumpOf = (seeds) => PK.findProgramAddressSync(seeds, PROGRAM_ID)[1];
+const u64 = (v) => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(v)); return b; };
+const i64 = (v) => { const b = Buffer.alloc(8); b.writeBigInt64LE(BigInt(v)); return b; };
+const u16 = (v) => { const b = Buffer.alloc(2); b.writeUInt16LE(v); return b; };
+const put = (svm, key, name, body) => {
+  const data = Buffer.concat([Buffer.from(discriminator(name)), ...body]);
+  svm.setAccount(key, { lamports: Number(rent(data.length)), data, owner: PROGRAM_ID, executable: false });
+};
+
+/// Config (admin, test-USDC mint, vault), as `initialize` wrote it.
+export function writeConfig(svm, admin) {
+  put(svm, configPda(), 'Config', [admin.toBuffer(), USDC_MINT.toBuffer(), VAULT.toBuffer(), u64(0), u64(0), u64(0), u64(0), Buffer.from([bumpOf([Buffer.from('config')])])]);
+}
+/// The reserve opened on `vault` tUSDC, all of it the admin's shares, as `init_reserve` wrote it.
+export function writeReserve(svm, admin, vault, createdTs = 0) {
+  put(svm, reservePda(), 'Reserve', [u64(vault), u64(0), u64(0), u64(0), u64(0), u64(0), u64(0), u64(0), u64(0), u64(0), u64(0), i64(createdTs), Buffer.from([bumpOf([Buffer.from('reserve')])])]);
+  put(svm, lenderPda(admin), 'Lender', [admin.toBuffer(), u64(vault), u64(vault), u64(0), Buffer.from([bumpOf([Buffer.from('lender'), admin.toBuffer()])])]);
+}
+/// The desk and its Solana quotes, as `init_desk` wrote them.
+export function writeDesk(svm, admin, relayer) {
+  put(svm, deskPda(), 'Desk', [admin.toBuffer(), u16(DESK_SPREAD_BPS), ...MARKETS.map((m) => m.mintKey.toBuffer()), Buffer.from(MARKETS.map((m) => m.decimals)),
+    u64(0), u64(0), u64(0), u64(0), Buffer.from([bumpOf([Buffer.from('desk')])])]);
+  put(svm, quotesPda(), 'Quotes', [relayer.toBuffer(), ...MARKETS.map(() => u64(0)), i64(0), u64(0), Buffer.from([bumpOf([Buffer.from('quotes')])])]);
 }
