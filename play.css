@@ -166,6 +166,8 @@ body[data-screen="intro"] .stage::before { opacity: 0; }
 .markets { display: flex; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .markets::-webkit-scrollbar { display: none; }
 .markets > * { flex: none; }
+/* the focus ring sits inside the card: the scrolling row clips anything drawn outside it */
+.market:focus-visible { outline-offset: -3px; border-radius: 12px; }
 .market {
   display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 8px; row-gap: 1px; text-align: left;
   min-width: 104px; padding: 9px 12px 10px; border-radius: 12px;
