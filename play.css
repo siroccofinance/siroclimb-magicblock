@@ -35,10 +35,11 @@ a { color: inherit; text-decoration: none; }
 svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ───────── stage: the live scene, framed like the hero ───────── */
-.stage { position: fixed; inset: 0; z-index: 0; background: var(--bg) url("assets/poster/siroclimb-hero-poster-1920x1080.webp") 60% 30% / cover no-repeat; }
+.stage { position: fixed; inset: 0; z-index: 0; background: radial-gradient(120% 90% at 70% 30%, #cf6237 0%, var(--bg) 45%, #8f3517 100%); }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity .6s var(--ease); }
 .stage canvas.is-live { opacity: 1; }
-.stage__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 30%; display: block; }
+.stage__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 30%; display: block; opacity: 0; }
+.stage.is-film .stage__video { opacity: 1; }   /* fallback only: no WebGL or reduced motion */
 .stage::after {
   content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: linear-gradient(to top, rgba(43, 20, 10, .58) 0%, rgba(43, 20, 10, .2) 34%, rgba(43, 20, 10, 0) 56%);

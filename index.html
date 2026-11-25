@@ -5,17 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Siroclimb</title>
   <meta name="description" content="Siroclimb, the Sirocco climbing game on tokenized stocks and gold. Every step adds leverage up to 4x on live Pyth prices, played on a MagicBlock Ephemeral Rollup. Cash out anytime, your stake is the most you can lose.">
-  <link rel="preload" as="image" href="assets/poster/siroclimb-hero-poster-1920x1080.webp">
   <meta name="theme-color" content="#c2552d">
   <link rel="icon" href="assets/brand/sirocco-mark-safran.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="play.css?v=13">
+  <link rel="stylesheet" href="play.css?v=14">
 </head>
 <body data-screen="intro">
   <div class="stage" id="stage" aria-hidden="true">
-    <video class="stage__video" id="film" autoplay muted loop playsinline preload="auto" poster="assets/poster/siroclimb-hero-poster-1920x1080.webp">
+    <video class="stage__video" id="film" muted loop playsinline preload="none">
       <source src="assets/video/siroclimb-hero-2560x1440.webm" type="video/webm" media="(min-width: 1600px)">
       <source src="assets/video/siroclimb-hero-2560x1440.mp4" type="video/mp4" media="(min-width: 1600px)">
       <source src="assets/video/siroclimb-hero-1920x1080.webm" type="video/webm">
@@ -233,13 +232,12 @@
   </div>
   <div class="wash" id="wash" aria-hidden="true"></div>
   <script>
-    // deep link straight to the game: cover the stage until the live scene is drawing
+    // deep link straight to the game: cover the stage until the live scene is drawing (the pre-rendered film
+    // is only a fallback when WebGL is unavailable: the live scene draws the current coin from the first frame)
     if (location.hash === '#play') { document.body.dataset.screen = 'lobby'; document.getElementById('wash').classList.add('is-on'); }
-    const v = document.getElementById('film'), go = () => v.play().catch(() => {});
-    v.addEventListener('canplay', go, { once: true }); go();
   </script>
 
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "@solana/web3.js": "./js/vendor/solana.mjs", "buffer": "./js/vendor/buffer.mjs" } }</script>
-  <script type="module" src="js/game.js?v=18"></script>
+  <script type="module" src="js/game.js?v=19"></script>
 </body>
 </html>
