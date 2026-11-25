@@ -34,8 +34,12 @@ export default async function handler(req, res) {
       const keys = t ? t.transaction.message.staticAccountKeys || t.transaction.message.accountKeys : [];
       if (keys.some((k) => k.equals(to))) return out(429, { error: 'funded in the last 24 h' });
     }
-    const sig = await send(conn, [SystemProgram.transfer({ fromPubkey: faucet.publicKey, toPubkey: to, lamports: AMOUNT })], [faucet], { label: 'faucet' });
-    out(200, { sig, lamports: AMOUNT });
+    // a faucet running low still gives what it can (enough for onboarding), rather than failing the whole transfer
+    const left = (await conn.getBalance(faucet.publicKey)) - 0.01e9;
+    const lamports = Math.min(AMOUNT, left);
+    if (lamports < ENOUGH) return out(503, { error: 'faucet empty' });
+    const sig = await send(conn, [SystemProgram.transfer({ fromPubkey: faucet.publicKey, toPubkey: to, lamports })], [faucet], { label: 'faucet' });
+    out(200, { sig, lamports });
   } catch (e) {
     out(400, { error: String(e.message || e).slice(0, 200) });
   }
