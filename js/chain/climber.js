@@ -8,7 +8,7 @@ import { DELEGATION_PROGRAM_ID, ER_VALIDATOR, MARKETS, ONE_USDC, PROGRAM_ID, RUN
 import { RUN_SIZE, decodeLender, decodePrice, decodeProfile, decodeReserve, decodeRun } from './codec.js';
 import { approveIx, createAtaIdempotent, createSessionIx, ix } from './ix.js';
 import { ataOf, lenderPda, profilePda, reservePda, runPda, sessionTokenPda } from './pdas.js';
-import { send, sleep } from './tx.js';
+import { errorCode, send, sleep } from './tx.js';
 
 export const SESSION_HOURS = 12;
 /// Lamports the wallet gives its session key: base-layer fees and the rent the
@@ -89,13 +89,62 @@ export class Climber {
     const tBase = Date.now();
     await this.waitOnEr(runPda(this.me), (d) => decodeRun(d).status === RUN.STAKED);
     const tEr = Date.now();
-    const begin = await send(this.er, [ix.beginRun(a.publicKey, this.me, asset, crank)], [a], { label: 'begin run' });
+    // the price must be fresh to begin: a relayed xStock may be a second late, so try again briefly
+    let begin = null;
+    for (let i = 0; ; i++) {
+      try { begin = await send(this.er, [ix.beginRun(a.publicKey, this.me, asset, crank)], [a], { label: 'begin run' }); break; }
+      catch (e) { if (errorCode(e) !== 6013 || i >= 5) throw e; await sleep(1200); }
+    }
     const run = await this.run();
     return { run, sigs: { base, begin }, ms: { stake: tBase - t0, delegation: tEr - tBase, begin: Date.now() - tEr } };
   }
 
   async tickRun(asset) { return send(this.er, [ix.tickRun(this.me, asset)], [this.actor], { label: 'tick' }); }
-  async cashOut(asset) { return send(this.er, [ix.cashOut(this.actor.publicKey, this.me, asset)], [this.actor], { label: 'cash out' }); }
+  /// Cash out on the rollup. A copy the rollup dropped is sent again freshly signed (a second cash out cannot
+  /// apply: the program refuses it), and an attempt that fails because the climb already ended is a success.
+  async cashOut(asset, { onRetry } = {}) {
+    let last = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try { return await send(this.er, [ix.cashOut(this.actor.publicKey, this.me, asset)], [this.actor], { label: 'cash out', attempts: 1, tries: 24, expire: false }); }
+      catch (e) {
+        last = e;
+        const r = await this.run().catch(() => null);
+        if (r && r.status !== RUN.LIVE && r.status !== RUN.STAKED) return e.sig || null;   // it ended (this cash out, a bust or the bell)
+        if (errorCode(e) !== null && errorCode(e) !== 6013) throw e;
+        onRetry && onRetry(attempt);
+      }
+    }
+    throw last;
+  }
+  /// Bring the player's run account back to a state a new climb can start from, whatever was left behind
+  /// (a tab closed mid-climb, a cash out that never landed, a begin refused on a stale price). `say(msg)` narrates.
+  async recover(say = () => {}) {
+    const t0 = Date.now();
+    for (;;) {
+      const r = await this.run();
+      if (!r || r.status === RUN.FREE || r.status === RUN.SETTLED) return r;
+      if (Date.now() - t0 > 90000) throw new Error('Your previous climb is still settling, try again in a minute');
+      const over = r.status === RUN.CASHED || r.status === RUN.BUSTED || r.status === RUN.EXPIRED;
+      if (r.layer === 'base') {
+        if (over) { say('Settling your previous climb on Solana…'); await this.settleRun().catch(() => {}); }
+        else await sleep(1000);
+      } else if (r.layer === 'moving') await sleep(800);                       // between Solana and the rollup
+      else if (r.status === RUN.LIVE) {                                         // left running on the rollup: cash it out now
+        say('Cashing out your previous climb…');
+        if (r.session.equals(this.actor.publicKey) || r.player.equals(this.actor.publicKey)) await this.cashOut(r.asset).catch(() => {});
+        else if (Date.now() / 1000 > r.startTs + 66) await this.finishRun(this.me, r.asset).catch(() => {});
+        await sleep(800);
+      } else if (r.status === RUN.STAKED) {                                     // staked but never begun: refunded after 30 s
+        const wait = r.createdTs + 31 - Date.now() / 1000;
+        say(`Refunding a climb that did not start${wait > 1 ? ` (${Math.ceil(wait)} s)` : ''}…`);
+        if (wait > 0) await sleep(Math.min(wait * 1000, 3000));
+        else { await this.finishRun(this.me, r.asset).catch(() => {}); await sleep(800); }
+      } else if (over) {                                                        // over on the rollup: on its way back
+        if (Date.now() / 1000 > r.endTs + 8) await this.finishRun(this.me, r.asset).catch(() => {});   // commit again if it never left
+        await sleep(800);
+      } else await sleep(800);
+    }
+  }
   /// Permissionless: end someone's busted / expired climb on the rollup.
   async finishRun(player, asset) { return send(this.er, [ix.finishRun(this.actor.publicKey, player, asset)], [this.actor], { label: 'finish run' }); }
   /// Permissionless: pay out a climb that is back on Solana.
