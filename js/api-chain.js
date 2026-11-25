@@ -13,14 +13,14 @@
 //              the rollup, commit + undelegate, settle on Solana. Solo only.
 import { Connection } from '@solana/web3.js';
 import {
-  BASE_RPC, BOOST, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
+  BASE_RPC, BOOST, RELAY_ASSETS, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
   RUN, RUN_SECONDS, STEP_SECONDS, PACK, VAULT, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
 import { decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
 import { reservePda, runPda } from './chain/pdas.js';
-import { send, sleep } from './chain/tx.js';
+import { errorCode, send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor } from './chain/handles.js';
 import { inSession, nextOpen } from './chain/hours.js';
@@ -32,6 +32,10 @@ const base = new Connection(BASE_RPC, 'confirmed');
 const er = new Connection(ER_RPC, 'confirmed');
 const DELEGATION = 'DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh';
 const log = (...a) => { if (globalThis.SIROCLIMB_DEBUG) console.log('[siroclimb]', ...a); };
+/// Short progress messages for the player (recovering a climb, a slow cash out).
+let noticeCb = () => {};
+const notice = (m) => noticeCb(m);
+export const onNotice = (cb) => { noticeCb = cb; };
 const fail = (e) => { const m = new Error(friendlyError(e)); m.cause = e; return m; };
 const store = {
   get(k, d) { try { const v = localStorage.getItem('siroclimb:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -80,16 +84,24 @@ seedHistory();
 // The xStocks' 24/7 prices reach the rollup through the program's relay accounts:
 // while this page is visible it asks /api/relay to push (at most about once a second).
 const RELAY_URL = (globalThis.SIROCLIMB_ENV && globalThis.SIROCLIMB_ENV.RELAY_URL) || 'api/relay';
-let relayOk = true, relayBusy = false;
+let relayOk = true, relayBusy = false, lastWake = 0;
 function pingRelay() {
   if (!relayOk || relayBusy || (globalThis.document && document.hidden)) return;
   relayBusy = true;
   fetch(RELAY_URL, { method: 'POST' }).then((r) => { if (r.status === 404) relayOk = false; }).catch(() => {}).finally(() => { relayBusy = false; });
 }
 pingRelay(); setInterval(pingRelay, 1000);
+globalThis.document && document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastWake = Date.now(); pingRelay(); } });
 
 export const listAssets = () => MARKETS.map(({ id, name, ticker, kind, hours }) => ({ id, name, ticker, kind, hours }));
 export const marketOpen = (id) => isOpen(feeds[marketIndex(id)]);
+/// A relayed xStock whose price has not been pushed lately (nobody had the game open): the page has asked the
+/// relay and the first fresh price lands within a second or two. Shown as "Live price…", not "Closed".
+const WAKING_MS = 20000, loadedAt = Date.now();
+export const marketWaking = (id) => {
+  const i = marketIndex(id);
+  return RELAY_ASSETS.includes(i) && !isOpen(feeds[i]) && relayOk && Date.now() - Math.max(loadedAt, lastWake) < WAKING_MS;
+};
 /// When a closed market's next session starts (ms), or null if unknown.
 export const marketOpensAt = (id) => nextOpen(MARKETS[marketIndex(id)].hours);
 export function subscribePrice(id, cb) {
@@ -310,15 +322,18 @@ async function watchRun(R) {
   const key = runPda(wallet.publicKey), me = climber;
   while (!R.result) {
     await sleep(220);
+    let layer = 'er';
     try {
       const a = await er.getAccountInfo(key);
       if (a && a.owner.equals(PROGRAM_ID)) R.chain = decodeRun(a.data);
       else {
         const b = await base.getAccountInfo(key);
         if (b && b.owner.equals(PROGRAM_ID)) R.chain = decodeRun(b.data);
+        layer = 'base';
       }
     } catch { continue; }
     const s = R.chain.status;
+    if (s !== R.lastStatus) { log('run', R.id, 'status', R.lastStatus, '->', s, 'ticks', R.chain.ticks, 'layer', layer); R.lastStatus = s; }
     if (s === RUN.CASHED || s === RUN.BUSTED || s === RUN.EXPIRED || s === RUN.SETTLED) {
       R.endStatus = STATUS[s] || R.endStatus;
       R.result = resultOf(R);
@@ -340,18 +355,15 @@ async function settleRun(R, me) {
   profile = await me.profile().catch(() => profile);
 }
 
-/// After a reload: pick up a climb left in flight, finish and settle it.
+/// After a reload: pick up a climb left in flight and bring it home (cash out / refund, settle).
 async function resumeMyRun() {
   try {
     const c = await climber.run();
     if (!c || c.status === RUN.FREE || c.status === RUN.SETTLED) return;
-    const id = `solo:${c.nonce}`;
-    if (runs.has(id)) return;
-    const R = { id, asset: c.asset, top: c.top, chain: c, subs: new Set(), done: [], result: null };
-    R.pub = pubRun(id, 'solo', c);
-    runs.set(id, R);
-    if (c.status === RUN.STAKED && c.layer === 'er') await climber.finishRun(climber.me, c.asset).catch(() => {});
-    watchRun(R);
+    log('resume', 'run', c.nonce, 'status', c.status, 'layer', c.layer);
+    await climber.recover((m) => { log('recover', m); notice(m); });
+    await refreshBalance();
+    profile = await climber.profile().catch(() => profile);
   } catch (e) { log('resume', e.message); }
 }
 
@@ -363,13 +375,18 @@ export async function startRun({ mode = 'solo', assetId, side = 'long', stake, p
   try {
     await ensureReady();
     await ensureFuel();
-    const cur = await climber.run();
-    if (cur && cur.status !== RUN.FREE && cur.status !== RUN.SETTLED) {
-      // the last climb is still on its way back: finish it first
-      if (cur.layer === 'er') await climber.finishRun(climber.me, cur.asset).catch(() => {});
-      await climber.settleRun().catch(() => {});
+    // whatever the last climb left behind (closed tab, a cash out that never landed, a refused begin): end it first
+    await climber.recover((m) => { log('recover', m); notice(m); });
+    let res;
+    try { res = await climber.startRun({ asset, side, stake: pack ? 0 : stake, usePack: !!pack }); }
+    catch (e) {
+      // refused for a reason that is not the player's (the run account was not ready): recover and try once more
+      const code = errorCode(e);
+      if ([6005, 6009, 6026, 6027].includes(code)) throw e;
+      log('start', 'failed', e.message, '- recovering and retrying');
+      await climber.recover((m) => { log('recover', m); notice(m); });
+      res = await climber.startRun({ asset, side, stake: pack ? 0 : stake, usePack: !!pack });
     }
-    const res = await climber.startRun({ asset, side, stake: pack ? 0 : stake, usePack: !!pack });
     const c = res.run, id = `solo:${c.nonce}`;
     const R = { id, mode: 'solo', asset, top: c.top, chain: c, subs: new Set(), done: [], result: null, ms: res.ms };
     R.pub = pubRun(id, 'solo', c, pack ? { pack: PACKS[c.packTier] } : {});
@@ -389,9 +406,14 @@ export function runInfo(id) { const R = runs.get(id); return R ? R.pub : null; }
 export async function cashOut(id) {
   const R = runs.get(id);
   if (R.result) return R.result;
+  const t0 = Date.now();
+  log('cash out', id, 'sending');
   try {
-    addProof(id, 'Cash out on the rollup (commit + undelegate)', await climber.cashOut(R.asset), 'er');
+    const sig = await climber.cashOut(R.asset, { onRetry: (n) => { log('cash out', id, 'retry', n); notice('The rollup is slow, cashing out again…'); } });
+    log('cash out', id, 'confirmed on the rollup', sig, Date.now() - t0, 'ms');
+    addProof(id, 'Cash out on the rollup (commit + undelegate)', sig, 'er');
   } catch (e) {
+    log('cash out', id, 'failed after', Date.now() - t0, 'ms', e.message, (e.logs || []).slice(-4).join(' | '));
     if (!R.result) throw fail(e);
   }
   return whenEnded(id);

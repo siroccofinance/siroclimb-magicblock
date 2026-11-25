@@ -1,6 +1,24 @@
 {
-  "rewrites": [{ "source": "/s/:t", "destination": "/api/s?t=:t" }],
+  "rewrites": [
+    {
+      "source": "/s/:t",
+      "destination": "/api/s?t=:t"
+    }
+  ],
   "functions": {
-    "api/card.js": { "includeFiles": "assets/share/**", "memory": 1024 }
-  }
+    "api/card.js": {
+      "includeFiles": "assets/share/**",
+      "memory": 1024
+    },
+    "api/relay.js": {
+      "maxDuration": 60,
+      "memory": 256
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/relay",
+      "schedule": "* * * * *"
+    }
+  ]
 }

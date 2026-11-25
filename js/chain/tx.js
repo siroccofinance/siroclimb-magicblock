@@ -11,7 +11,9 @@ export class TxError extends Error {
 }
 
 /// `signers[0]` pays. A signer is a Keypair, or a wallet `{ publicKey, signTransaction }`.
-export async function send(connection, ixs, signers, { label = 'tx', attempts = 3, tries = 80, delayMs = 250, onSent } = {}) {
+/// `expire: false` skips waiting for a dropped copy's blockhash to expire before signing afresh: only for
+/// instructions that cannot apply twice (the program refuses a second cash out with BadStatus).
+export async function send(connection, ixs, signers, { label = 'tx', attempts = 3, tries = 80, delayMs = 250, onSent, expire = true } = {}) {
   let last = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const tx = new Transaction().add(...ixs);
@@ -40,7 +42,7 @@ export async function send(connection, ixs, signers, { label = 'tx', attempts = 
       if (!st && Date.now() - lastResend > resendEvery) { lastResend = Date.now(); connection.sendRawTransaction(signed.serialize(), { skipPreflight: true, maxRetries: 0 }).catch(() => {}); }
     }
     // Still unknown: wait until its blockhash can no longer land, then sign afresh.
-    while ((await connection.getBlockHeight('confirmed').catch(() => 0)) <= lastValidBlockHeight) {
+    while (expire && (await connection.getBlockHeight('confirmed').catch(() => 0)) <= lastValidBlockHeight) {
       const { value } = await connection.getSignatureStatuses([sig]);
       const st = value[0];
       if (st && st.err) throw new TxError(`${label} failed: ${JSON.stringify(st.err)}`, { sig, err: st.err });
