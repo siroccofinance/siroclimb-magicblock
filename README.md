@@ -4,11 +4,18 @@
 
 Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Leverage is a real loan: past 1x the rest of the position is borrowed from the **Sirocco Reserve**, a tUSDC lending pool anyone can lend to.
 
+| | |
+|---|---|
+| Play | https://siroclimb.sirocco.finance (devnet, built-in burner wallet, no install) |
+| Program | [`BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ`](https://explorer.solana.com/address/BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ?cluster=devnet) (Anchor, Solana devnet) |
+| Ephemeral Rollup | MagicBlock devnet-eu `https://devnet-eu.magicblock.app` |
+| MagicBlock stack | Ephemeral Rollups (delegate, commit + undelegate), Cranks (`ScheduleTask`), real-time price oracle, VRF, session keys |
+
 Built for MagicBlock's Solana Blitz v10 (Entertainment Finance). Everything runs on **Solana devnet + MagicBlock's devnet Ephemeral Rollup**. The xStocks trade around the clock and so does the game: their live 24/7 market price is relayed into the rollup; gold reads MagicBlock's Pyth Lazer feed.
 
 ## Why MagicBlock
 
-A climb is a minute of a position that changes every half second: the price moves, the leverage steps up every 6 seconds, the coin can fall at any tick, and the player can cash out at any instant. On Solana alone that is 120 paid transactions per climb, a wallet prompt per action and 400 ms slots between a click and its effect. On an Ephemeral Rollup the whole minute runs on chain, ticked by the rollup's own crank against MagicBlock's real-time Pyth prices, at zero fee and with 10 ms blocks, while the money (stakes, vault, payouts) never leaves Solana. Session keys remove the last friction: one approval, then every action is instant.
+A climb is a minute of a position that changes every half second: the price moves, the leverage steps up every 6 seconds, the coin can fall at any tick, and the player can cash out at any instant. On Solana alone that is 120 paid transactions per climb, a wallet prompt per action and 400 ms slots between a click and its effect. On an Ephemeral Rollup the whole minute runs on chain, ticked by the rollup's own crank against live prices on the rollup (the xStocks' own 24/7 market through the program's relay, gold from MagicBlock's Pyth Lazer feed), at zero fee and with 10 ms blocks, while the money (stakes, vault, payouts) never leaves Solana. Session keys remove the last friction: one approval, then every action is instant.
 
 ## How a climb runs
 
@@ -20,7 +27,7 @@ A climb is a minute of a position that changes every half second: the price move
    (create_session_v2) + spending allowance
  start_run ─ stake to the vault, the Sirocco
    Reserve sets liquidity aside for the climb
-   + delegate_run (signed by the session key) ──▶ begin_run   entry = live Pyth Lazer price,
+   + delegate_run (signed by the session key) ──▶ begin_run   entry = live price on the rollup,
                                                               ScheduleTask: tick_run every 500 ms
                                                  tick_run ×120  crank, on chain, free:
                                                               leverage step, value, bust, bell
@@ -83,7 +90,7 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | Stakes, Sirocco Reserve (shares, reserved liquidity, borrow lines, lender positions) | ✓ | | |
 | Session authorisation (`SessionTokenV2`) and spending allowance | ✓ | | |
 | Live climbs: entry price, ticks, leverage, amount borrowed, bust, cash out | | ✓ | |
-| Prices (Pyth Lazer pushed by MagicBlock) | | ✓ | |
+| Prices: xStock relay accounts (24/7, pushed by `/api/relay`), gold from Pyth Lazer (pushed by MagicBlock) | | ✓ | relay source: Kraken / Jupiter |
 | Profiles: handle, record, bests, last 8 climbs, pack | ✓ | | |
 | VRF draws: leverage packs | ✓ | | |
 | Leaderboards (today, all time) | read | | front |
@@ -91,7 +98,7 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 
 **Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
 
-**Serverless.** No server has to run for the game to work: every step of a climb is permissionless and the page itself pushes each one along (autopilot), and the xStock prices are relayed by `/api/relay` while a browser has the game open. The optional keeper (`npm run keeper`) relays all the time and sweeps climbs left on the rollup by closed tabs. The serverless routes are a devnet SOL faucet for new wallets and the share cards below.
+**Serverless.** No server has to run for the game to work: every step of a climb is permissionless and the page itself pushes each one along (autopilot), and the xStock prices are relayed by `/api/relay`, every second while a browser has the game open and from a Vercel cron that keeps pushing every second when nobody does. The optional keeper (`npm run keeper`) relays all the time and sweeps climbs left on the rollup by closed tabs. The serverless routes are a devnet SOL faucet for new wallets and the share cards below.
 
 **Share on X.** After a climb, Share opens X with a link like `https://siroclimb.sirocco.finance/s/<token>`. `/api/share` reads the player's run account (settled, back on Solana) and the matching record of their profile, and signs that result with a server secret; the `/s/` page carries `twitter:card = summary_large_image` and an `og:image` drawn by `/api/card` (1200 x 630 PNG: the coin, the result, return, top leverage, stake, time, market and side; SVG + Inter rendered by resvg). A card cannot claim a climb nobody played, and a changed token is refused. **Save image** downloads the in-game picture of the end of the climb. People who open the link land on the game.
 
@@ -180,6 +187,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 
 ## Known gaps
 
+- **The xStock relay is a trusted key.** Only the relay key named at `init_relay` can push, prices may not go back in time, and a stale relay closes the market, but the prices themselves are as good as the relay's sources (Kraken's xStock book, Jupiter's xStock price on Solana, cross-checked at 1.5 %). Signed Pyth updates (`Crypto.TSLAX/USD` and the others) verified on chain would remove the trust once MagicBlock carries them on the rollup.
 - **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. The front funds the session key in proportion to the wallet (up to about 60 climbs) and shows the fuel left in the wallet menu; keeping a player's run delegated between climbs would remove the cost and is left for after the hackathon.
 
 ## Repository
