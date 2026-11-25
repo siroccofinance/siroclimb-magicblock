@@ -27,12 +27,17 @@ import { ix } from '../js/chain/ix.js';
 import { lenderPda, profilePda, reservePda, runPda } from '../js/chain/pdas.js';
 import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
+import { pushOnce } from '../js/chain/relay.js';
 import { uniqueHandles } from '../js/chain/handles.js';
 import { KEY_DIR, adminKeypair, baseConnection, erConnection, namedKeypair, short } from './lib/env.mjs';
 
 const N = Number(process.argv[2] || 24);
 const WAVES = Number(process.argv[3] || 2);
 const base = baseConnection(), er = erConnection(), admin = adminKeypair();
+
+// the xStocks' prices reach the rollup through the relay: keep it pushing during the battery
+let relayOn = true;
+(async () => { const relayer = namedKeypair('relayer'); while (relayOn) { await pushOnce(er, relayer, { minGapS: 0 }).catch(() => {}); await sleep(700); } })();
 const T0 = Date.now();
 const say = (...a) => console.log(`[${((Date.now() - T0) / 1000).toFixed(0).padStart(4)}s]`, ...a);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -220,6 +225,7 @@ for (let w = 1; w <= WAVES; w++) {
   await refuse(tag, 'a session key acting for another wallet', 6000, () => send(base, [ix.startRun(c.actor.publicKey, d.me, { asset: 0, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [c.actor], { label: 'impersonate', attempts: 1 }));
   await refuse(tag, 'a market that does not exist', 6007, () => send(base, [ix.startRun(c.actor.publicKey, c.me, { asset: 9, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [c.actor], { label: 'badasset', attempts: 1 }));
   await refuse(tag, 'a pack climb without a pack', 6023, () => send(base, [ix.startRun(c.actor.publicKey, c.me, { asset: 0, side: 0, stake: 0n, usePack: true }, c.token)], [c.actor], { label: 'nopack', attempts: 1 }));
+  await refuse(tag, 'a price pushed by a player', 6000, () => send(er, [ix.pushPrice(c.actor.publicKey, 0, 30000000n, BigInt(Math.floor(Date.now() / 1000)))], [c.actor], { label: 'push', attempts: 1 }));
   await refuse(tag, 'faucet twice in a row', 6006, async () => { await c.faucet().catch(() => {}); await c.faucet(); });
 }
 
@@ -263,6 +269,8 @@ for (let w = 1; w <= WAVES; w++) {
   check('reserve', 'settled climbs counted', rs.runs - reserve0.runs >= costs.length, `${rs.runs - reserve0.runs} runs`);
   reserveSummary = `Sirocco Reserve: ${costs.length} climbs drew on it, ${(costs.reduce((a, b) => a + b, 0) / 1e6).toFixed(4)} tUSDC of borrow costs paid, net result for lenders ${(flows.reduce((a, b) => a + b, 0) / 1e6).toFixed(2)} tUSDC; share price ${((rs.vault - rs.staked) / rs.shares).toFixed(6)}.`;
 }
+
+relayOn = false;
 
 // ------------------------------------------------------------------ report
 const adminEnd = await base.getBalance(admin.publicKey);
