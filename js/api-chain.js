@@ -80,10 +80,11 @@ seedHistory();
 // The xStocks' 24/7 prices reach the rollup through the program's relay accounts:
 // while this page is visible it asks /api/relay to push (at most about once a second).
 const RELAY_URL = (globalThis.SIROCLIMB_ENV && globalThis.SIROCLIMB_ENV.RELAY_URL) || 'api/relay';
-let relayOk = true;
+let relayOk = true, relayBusy = false;
 function pingRelay() {
-  if (!relayOk || (globalThis.document && document.hidden)) return;
-  fetch(RELAY_URL, { method: 'POST' }).then((r) => { if (r.status === 404) relayOk = false; }).catch(() => {});
+  if (!relayOk || relayBusy || (globalThis.document && document.hidden)) return;
+  relayBusy = true;
+  fetch(RELAY_URL, { method: 'POST' }).then((r) => { if (r.status === 404) relayOk = false; }).catch(() => {}).finally(() => { relayBusy = false; });
 }
 pingRelay(); setInterval(pingRelay, 1000);
 
