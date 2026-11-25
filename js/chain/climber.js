@@ -42,9 +42,9 @@ export class Climber {
     if (!b) return null;
     if (b.owner.equals(DELEGATION_PROGRAM_ID)) {
       const e = await this.er.getAccountInfo(runPda(this.me));
-      return e ? { ...decodeRun(e.data), layer: 'er' } : { ...decodeRun(b.data), layer: 'moving' };
+      return e ? { ...decodeRun(e.data), layer: 'er', size: e.data.length } : { ...decodeRun(b.data), layer: 'moving', size: b.data.length };
     }
-    return { ...decodeRun(b.data), layer: 'base' };
+    return { ...decodeRun(b.data), layer: 'base', size: b.data.length };
   }
 
   // -------------------------------------------------- onboarding (1 approval)
@@ -131,7 +131,12 @@ export class Climber {
         if (over) { say('Settling your previous climb on Solana…'); await this.settleRun().catch(() => {}); }
         else await sleep(1000);
       } else if (r.layer === 'moving') await sleep(800);                       // between Solana and the rollup
-      else if (r.status === RUN.LIVE) {                                         // left running on the rollup: cash it out now
+      else if (r.size < RUN_SIZE) {                                            // an older layout left on the rollup: rescue_run
+        const wait = r.status === RUN.STAKED ? r.createdTs + 31 - Date.now() / 1000 : r.status === RUN.LIVE ? r.startTs + 66 - Date.now() / 1000 : 0;
+        say(wait > 1 ? `Freeing a climb left from an older version (${Math.ceil(wait)} s)…` : 'Freeing a climb left from an older version…');
+        if (wait > 0) await sleep(Math.min(wait * 1000, 3000));
+        else { await send(this.er, [ix.rescueRun(this.actor.publicKey, this.me)], [this.actor], { label: 'rescue run', attempts: 1, tries: 24 }).catch((e) => { this.lastRecoverError = e; }); await sleep(1500); }
+      } else if (r.status === RUN.LIVE) {                                         // left running on the rollup: cash it out now
         say('Cashing out your previous climb…');
         if (r.session.equals(this.actor.publicKey) || r.player.equals(this.actor.publicKey)) await this.cashOut(r.asset).catch(() => {});
         else if (Date.now() / 1000 > r.startTs + 66) await this.finishRun(this.me, r.asset).catch(() => {});
