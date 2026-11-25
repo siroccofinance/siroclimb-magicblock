@@ -505,3 +505,7 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 .dl[hidden] { display: none; }
 .ghost.is-busy { opacity: .7; cursor: progress; }
 @media (max-width: 767px) { #share .wide { display: none; } .result { padding-bottom: calc(max(var(--bottom), env(safe-area-inset-bottom, 0px)) + 24px); } }
+
+/* a 24/7 market whose live price is on its way (relay waking up) */
+.market.is-waking .k { color: var(--ink-soft); animation: blink 1.2s ease-in-out infinite; }
+.market[aria-pressed="true"].is-waking .k { color: rgba(43, 33, 26, .65); }
