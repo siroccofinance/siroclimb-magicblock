@@ -140,7 +140,7 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   await timed('delegation visible on the rollup', () => c.waitOnEr(runPda(c.me), (d) => decodeRun(d).status === RUN.STAKED));
   if (opts.refusals) {
     await refuse(tag, 'begin with another market\'s feed', 6012, () => send(er, [ix.beginRun(a.publicKey, c.me, (asset + 1) % MARKETS.length)], [a], { label: 'bad feed', attempts: 1 }));
-    await refuse(tag, 'settle while the climb is on the rollup', 3007, () => send(base, [ix.settleRun(a.publicKey, c.me)], [a], { label: 'early settle', attempts: 1 }));
+    await refuse(tag, 'settle while the climb is on the rollup', 3007, () => send(base, [ix.settleRun(a.publicKey, c.me, 0)], [a], { label: 'early settle', attempts: 1 }));
     await refuse(tag, 'a second climb while one is delegated', 3007, () => send(base, [ix.startRun(a.publicKey, c.me, { asset, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [a], { label: 'second', attempts: 1 }));
   }
   await timed('begin + crank (rollup)', () => send(er, [ix.beginRun(a.publicKey, c.me, asset, true)], [a], { label: 'begin' }));
@@ -184,7 +184,7 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   costs.push(fin.cost); flows.push(cost - fin.payout);
   const prof1 = await c.profile();
   check(tag, 'profile records the climb', prof1.runs === prof0.runs + 1 && prof1.history[0].stake === fin.stake, `runs ${prof0.runs}->${prof1.runs}`);
-  await refuse(tag, 'settle twice', 6011, () => send(base, [ix.settleRun(c.actor.publicKey, c.me)], [c.actor], { label: 'twice', attempts: 1 }));
+  await refuse(tag, 'settle twice', 6011, () => send(base, [ix.settleRun(c.actor.publicKey, c.me, 0)], [c.actor], { label: 'twice', attempts: 1 }));
   return { status: erState.status, pnl: (fin.value - fin.stake) / 1e6, maxStep: fin.maxStep, ticks: fin.ticks };
 }
 

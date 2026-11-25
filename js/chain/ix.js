@@ -4,12 +4,12 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import {
-  ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, ER_VALIDATOR, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, MARKETS, PROGRAM_ID, SESSION_PROGRAM_ID,
+  ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, ER_VALIDATOR, TOKEN_2022_PROGRAM_ID, MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID, MARKETS, PROGRAM_ID, SESSION_PROGRAM_ID,
   SLOT_HASHES, TOKEN_PROGRAM_ID, USDC_MINT, VAULT, VRF_BASE_QUEUE, VRF_PROGRAM_ID,
 } from './config.js';
 import { encodeIx, ixAccounts } from './codec.js';
 import {
-  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, lenderPda, profilePda, relayPda, reservePda, roundSlotPda, runPda,
+  ata22Of, ataOf, bufferPda, configPda, deskPda, escrowOf, lendPda, quotesPda, delegationMetadataPda, delegationRecordPda, faucetPda, lenderPda, profilePda, relayPda, reservePda, roundSlotPda, runPda,
   vrfIdentityPda,
 } from './pdas.js';
 import * as PDAS from './pdas.js';
@@ -18,6 +18,7 @@ const FIXED = {
   system_program: SystemProgram.programId, token_program: TOKEN_PROGRAM_ID, magic_program: MAGIC_PROGRAM_ID, magic_context: MAGIC_CONTEXT_ID,
   delegation_program: DELEGATION_PROGRAM_ID, owner_program: PROGRAM_ID, vrf_program: VRF_PROGRAM_ID, slot_hashes: SLOT_HASHES,
   oracle_queue: VRF_BASE_QUEUE, program_identity: null, config: null,
+  token_2022_program: TOKEN_2022_PROGRAM_ID, ata_program: ATA_PROGRAM_ID,
 };
 
 /// Build `name` from its IDL account list. `accs` maps snake_case names to
@@ -28,6 +29,9 @@ export function build(name, accs, args = {}, remaining = []) {
     if (k === undefined) {
       if (a.name === 'config') k = configPda();
       else if (a.name === 'reserve') k = reservePda();
+      else if (a.name === 'desk') k = deskPda();
+      else if (a.name === 'quotes') k = quotesPda();
+      else if (a.name === 'lend') k = lendPda();
       else if (a.name === 'program_identity') k = vrfIdentityPda();
       else if (a.address) k = new PublicKey(a.address);
       else if (FIXED[a.name]) k = FIXED[a.name];
@@ -42,6 +46,11 @@ export function build(name, accs, args = {}, remaining = []) {
 }
 
 const feedOf = (asset) => MARKETS[asset].feedKey;
+/// The token accounts a climb's position moves through: the desk's, the lending book's, the climb's escrow.
+export function positionAccounts(player, asset) {
+  const m = MARKETS[asset].mintKey;
+  return { mint: m, desk_token: ata22Of(deskPda(), m), desk_usdc: ataOf(deskPda(), mint()), escrow: escrowOf(player, m), lend_token: ata22Of(lendPda(), m) };
+}
 const mint = () => { if (!USDC_MINT) throw new Error('No deployment: run npm run setup'); return USDC_MINT; };
 const validatorMeta = (v = ER_VALIDATOR) => [{ pubkey: v, isSigner: false, isWritable: false }];
 
@@ -78,8 +87,18 @@ export const ix = {
       payer, player, run, buffer_run: bufferPda(run), delegation_record_run: delegationRecordPda(run), delegation_metadata_run: delegationMetadataPda(run),
     }, {}, validatorMeta(validator));
   },
-  settleRun: (caller, player) =>
-    build('settle_run', { caller, run: runPda(player), profile: profilePda(player), player_usdc: ataOf(player, mint()), vault: VAULT }),
+  /// `asset`: the climb's market (its token accounts are settled with it).
+  settleRun: (caller, player, asset) => build('settle_run', {
+    caller, run: runPda(player), profile: profilePda(player), player_usdc: ataOf(player, mint()), vault: VAULT, ...positionAccounts(player, asset),
+  }),
+  /// The climb's real position: the stake's worth of the market token, bought (long) or borrowed and sold (short).
+  openPosition: (signer, player, asset) => build('open_position', { signer, player, run: runPda(player), vault: VAULT, ...positionAccounts(player, asset) }),
+
+  // ------------------------------------------------- the Sirocco desk (admin, relay)
+  initDesk: (admin, spreadBps, mints, decimals, relayer) => build('init_desk', { admin }, { spread_bps: spreadBps, mints, decimals, relayer }),
+  setDesk: (admin, spreadBps, mints, decimals) => build('set_desk', { admin }, { spread_bps: spreadBps, mints, decimals }),
+  pushQuotes: (relayer, prices, ts) => build('push_quotes', { relayer }, { prices, ts }),
+  fundDesk: (admin, amount) => build('fund_desk', { admin, usdc_mint: mint(), desk_usdc: ataOf(deskPda(), mint()) }, { amount }),
 
   initRelay: (admin, market, exponent, relayer) => build('init_relay', { admin, relay: relayPda(market) }, { market, exponent, relayer }),
   delegateRelay: (admin, market, validator) => {
