@@ -127,7 +127,7 @@ const walletBtn = $('#wallet'), walletMenu = $('#walletMenu');
 function renderWallet() {
   const a = api.account();
   walletBtn.classList.toggle('is-on', !!a);
-  walletBtn.textContent = a ? shortAddr(a) : mobile() ? 'Connect' : 'Connect wallet';
+  walletBtn.textContent = a ? (mobile() ? a.slice(0, 4) + '…' : shortAddr(a)) : mobile() ? 'Connect' : 'Connect wallet';
 }
 // wallet chooser: injected wallets and the devnet burner (the simulation has a single demo wallet)
 let pickWallet = null;

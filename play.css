@@ -330,6 +330,7 @@ body[data-screen="intro"] .stage::before { opacity: 0; }
   .balance__u { display: none; }
   .wallet__btn { padding: 0 10px; font-size: 13px; }
   .balance { gap: 2px; font-size: 14px; padding-right: 4px; }
+  .top__actions .icon { width: 32px; }   /* five icons, the balance and the wallet fit in 390 px */
   .balance__add { width: 24px; }
   .stage__video { object-position: 64% 30%; }
   .stage::after { background: linear-gradient(to top, rgba(43, 20, 10, .74) 0%, rgba(43, 20, 10, .3) 46%, rgba(43, 20, 10, 0) 66%); }
