@@ -35,8 +35,8 @@ function tokenAccount(mint, owner, amount) {
 svm.setAccount(USDC_MINT, { lamports: Number(rent(82)), data: tokenMint(configPda()), owner: TOKEN_PROGRAM_ID, executable: false });
 svm.setAccount(VAULT, { lamports: Number(rent(165)), data: tokenAccount(USDC_MINT, configPda(), 1_000_000_000_000), owner: TOKEN_PROGRAM_ID, executable: false });
 
-const TSLA = 0, XAU = 3, GME = 4;
-// every market priced at `ts`: the xStock relay accounts (ours) and gold's oracle feed
+const TSLA = 0, XAU = 3;
+// every market priced at `ts` by its relay account (ours)
 function setPrice(ts) {
   for (let a = 0; a < MARKETS.length; a++) {
     if (RELAY_ASSETS.includes(a)) {
@@ -99,26 +99,26 @@ const begin = (label, when, expectCode, asset = XAU, who = player) => {
 };
 const runStatus = (who = player) => decodeRun(Buffer.from(svm.getAccount(runPda(who.publicKey)).data)).status;
 
-// gold keeps its sessions: closed on Saturday and on Thanksgiving afternoon
-stake('gold, Saturday 10:00 New York', '2026-11-28T15:00:00Z', 6026);
-stake('gold, Thanksgiving 15:00 New York', '2026-11-26T20:00:00Z', 6026);
-// Friday 27 Nov gold closes at 14:45: staked at 14:44, the bell passes before the climb starts
-stake('gold, Friday 14:44 New York', '2026-11-27T19:44:00Z');
-begin('gold, Friday 14:45:30 New York, frozen price still fresh', '2026-11-27T19:45:30Z', 6026);
-ok('the climb stays staked (refundable by finish_run)', runStatus() === 1, `status ${runStatus()}`);
-// Monday 10:00 New York: the same staked climb starts
-begin('gold, Monday 10:00 New York', '2026-11-30T15:00:00Z');
-ok('the climb is live', runStatus() === 2, `status ${runStatus()}`);
-
-// the xStocks trade around the clock: TSLAx and GMEx climbs on a Saturday
-for (const [name, asset] of [['TSLAx', TSLA], ['GMEx', GME]]) {
-  const p = Keypair.generate(); svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
-  const r2 = send([createAtaIdempotent(p.publicKey, p.publicKey), ix.faucet(p.publicKey), ix.initProfile(p.publicKey, 'sat_' + name.toLowerCase())], [p]);
-  ok(`${name} player set up`, r2.ok, r2.logs.slice(-2).join(' '));
+// every market trades around the clock: a climb on each of the five on a Saturday, gold (XAUt) included
+const names = ['TSLAx', 'NVDAx', 'AAPLx', 'XAUt', 'GMEx'];
+for (const asset of [0, 1, 2, 3, 4]) {
+  const name = names[asset], p = asset === XAU ? player : Keypair.generate();
+  if (p !== player) {
+    svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
+    const r2 = send([createAtaIdempotent(p.publicKey, p.publicKey), ix.faucet(p.publicKey), ix.initProfile(p.publicKey, 'sat_' + name.toLowerCase())], [p]);
+    ok(`${name} player set up`, r2.ok, r2.logs.slice(-2).join(' '));
+  }
   stake(`${name}, Saturday 10:00 New York`, '2026-12-05T15:00:00Z', null, asset, p);
   begin(`${name}, Saturday 10:00:05 New York`, '2026-12-05T15:00:05Z', null, asset, p);
   ok(`${name}: the climb is live on a Saturday`, runStatus(p) === 2, `status ${runStatus(p)}`);
 }
+// gold on Thanksgiving afternoon and in spot gold's daily break: open too
+for (const [label, when] of [['Thanksgiving 15:00', '2026-11-26T20:00:00Z'], ['17:30 daily break', '2026-11-23T22:30:00Z']]) {
+  const p = Keypair.generate(); svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
+  send([createAtaIdempotent(p.publicKey, p.publicKey), ix.faucet(p.publicKey), ix.initProfile(p.publicKey, 'gold_' + label.slice(0, 4).toLowerCase())], [p]);
+  stake(`XAUt, ${label} New York`, when, null, XAU, p);
+}
+
 // a relay price that stopped (older than MAX_PRICE_AGE) is a closed market
 {
   const p = Keypair.generate(); svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
