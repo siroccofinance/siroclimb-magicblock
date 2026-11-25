@@ -71,6 +71,15 @@ pub const BEGIN_GRACE: i64 = 10;
 pub const STALE_SECONDS: i64 = 30;
 /// A live climb whose ticks stopped can still be ended this long after the bell.
 pub const FINISH_GRACE: i64 = 5;
+/// The run layout before the Sirocco Reserve (200 bytes with its discriminator) and the fixed offsets
+/// of the fields `rescue_run` reads in any older layout (they never moved: new fields are appended).
+pub const LEGACY_RUN_LEN: usize = 168;
+const R_STATUS: usize = 8 + 32 + 32 + 4;
+const R_STAKE: usize = R_STATUS + 6;
+const R_VALUE: usize = R_STAKE + 8;
+const R_CREATED: usize = R_VALUE + 8 * 3;
+const R_START: usize = R_CREATED + 8;
+const R_END: usize = R_START + 16;
 
 /// MagicBlock's real-time pricing oracle (Pyth Lazer, pushed into the ERs).
 pub const PRICE_ORACLE_PROGRAM_ID: Pubkey = pubkey!("PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd");
@@ -710,6 +719,46 @@ pub mod siroclimb {
             }
         }
         commit_back(&ctx.accounts.run, &ctx.accounts.payer, &ctx.accounts.magic_context, &ctx.accounts.magic_program)
+    }
+
+    /// Bring home a run account written before the last layout change and left on the rollup (the
+    /// program can no longer read it as a `Run`): read its fixed prefix, end it like `finish_run` would
+    /// (a staked climb that never began is refunded, a live one past the bell expires), and commit and
+    /// undelegate it. Back on Solana, `grow_run` + `settle_run` pay it out. Permissionless.
+    pub fn rescue_run(ctx: Context<RescueRun>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let info = ctx.accounts.run.to_account_info();
+        require_keys_eq!(*info.owner, crate::ID, ClimbError::BadStatus);
+        {
+            let mut d = info.try_borrow_mut_data()?;
+            require!(d.len() >= LEGACY_RUN_LEN && d.len() < 8 + Run::INIT_SPACE, ClimbError::BadStatus);
+            require!(d[..8] == *Run::DISCRIMINATOR, ClimbError::BadStatus);
+            let player = Pubkey::new_from_array(d[8..40].try_into().unwrap());
+            require_keys_eq!(Pubkey::find_program_address(&[RUN_SEED, player.as_ref()], &crate::ID).0, *info.key, ClimbError::BadStatus);
+            let rd = |d: &[u8], o: usize| i64::from_le_bytes(d[o..o + 8].try_into().unwrap());
+            let (status, mode) = (d[R_STATUS], d[R_STATUS + 1]);
+            let (created, start) = (rd(&d, R_CREATED), rd(&d, R_START));
+            match status {
+                RUN_STAKED => {
+                    require!(now > created + STALE_SECONDS, ClimbError::TooEarly);
+                    let stake = d[R_STAKE..R_STAKE + 8].to_vec();
+                    if mode == MODE_PACK { d[R_VALUE..R_VALUE + 8].copy_from_slice(&[0; 8]) } else { d[R_VALUE..R_VALUE + 8].copy_from_slice(&stake) }
+                    d[R_END..R_END + 8].copy_from_slice(&now.to_le_bytes());
+                    d[R_STATUS] = RUN_EXPIRED;
+                }
+                RUN_LIVE => {
+                    require!(now >= start + RUN_SECONDS + FINISH_GRACE, ClimbError::TooEarly);
+                    d[R_END..R_END + 8].copy_from_slice(&(start + RUN_SECONDS).to_le_bytes());
+                    d[R_STATUS] = RUN_EXPIRED;
+                }
+                RUN_CASHED | RUN_BUSTED | RUN_EXPIRED => {}
+                _ => return err!(ClimbError::BadStatus),
+            }
+        }
+        MagicIntentBundleBuilder::new(ctx.accounts.payer.to_account_info(), ctx.accounts.magic_context.to_account_info(), ctx.accounts.magic_program.to_account_info())
+            .commit_and_undelegate(&[info])
+            .build_and_invoke()?;
+        Ok(())
     }
 
     /// End a climb nobody cashed out (busted, or past the bell) and hand it
@@ -1372,6 +1421,16 @@ pub struct CashOut<'info> {
     pub run: Box<Account<'info, Run>>,
     /// CHECK: pinned and owner-checked in `read_feed`.
     pub feed: UncheckedAccount<'info>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct RescueRun<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: a run PDA of an older layout, checked in the handler (owner, discriminator, seeds).
+    #[account(mut)]
+    pub run: UncheckedAccount<'info>,
 }
 
 #[commit]
