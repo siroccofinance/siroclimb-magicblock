@@ -34,18 +34,18 @@ export const ATA_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efT
 export const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd');
 
-/// The five markets, in on-chain order: four xStocks and gold.
+/// The five markets, in on-chain order: four xStocks and gold, all open 24/7.
 ///
-/// The xStocks trade around the clock, so their prices must move all week.
-/// MagicBlock's rollups carry no TSLAx, NVDAx, AAPLx or GMEx feed, and Pyth's
-/// equity feeds stand still outside US hours: the four xStocks read the
-/// program's relay accounts (`["relay", asset]`), kept fresh with the xStock's
-/// own 24/7 market (js/chain/relay.js: mid of Kraken's xStock book `relay`, or
-/// for GMEx, `source: 'jupiter'`, Jupiter's price of the Solana mint
-/// `mainnetMint`) by /api/relay and the keeper. Gold is MagicBlock's XAU/USD feed (PDA("price_feed", "pyth-lazer", lazerId)).
+/// Every market is priced on the rollup by the program's relay accounts
+/// (`["relay", asset]`), kept fresh with the asset's own 24/7 token market
+/// (js/chain/relay.js) by /api/relay, its cron and the keeper: the mid of
+/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold), or for GMEx,
+/// `source: 'jupiter'`, Jupiter's price of the Solana mint (`mainnetMint`).
+/// The other venue is the sanity check. MagicBlock's rollups carry no xStock
+/// feed, Pyth's equity feeds stand still outside US hours and Pyth's XAU/USD
+/// closes on weekends, which is why the game prices from the tokens themselves.
 ///
-/// `hours`: when the price moves. '24/7' for the xStocks; gold trades Sun 18:00
-/// to Fri 17:00 New York with a daily hour off, and shows as closed outside.
+/// `hours`: when the price moves; '24/7' for every market.
 export const MARKETS = [
   { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', relay: 'TSLAxUSD', exponent: -5, feed: 'EZzYNjVe8T3SfPiRknV4JA9JTfbfeBfWRoD8CymuUUHu', hours: '24/7',
     mint: 'EwksJmGYpSHWwznpeX8XGqHPBEhqyH4nHX92WH7uUz8g', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
@@ -53,7 +53,9 @@ export const MARKETS = [
     mint: '4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', relay: 'AAPLxUSD', exponent: -5, feed: 'BMPPdknGVDDzPsRSwnhHyuR1YwmJ9xM9ij841S96rXY5', hours: '24/7',
     mint: 'yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
-  { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', lazerId: 346, exponent: -3, feed: '9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn', hours: 'metal' },
+  // gold as XAUt (Tether Gold), which trades 24/7: Kraken's XAUt/USD book, Jupiter's XAUt0 on Solana as the check
+  { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', relay: 'XAUTUSD', exponent: -3, feed: 'CGNjvcw4CJBdYKiV4aGVjqvgmMQfA9pTnz2V2bqzBp8N', hours: '24/7',
+    mainnetMint: 'AymATz4TCL9sWNEEV9Kvyz45CHVhDZ6kUgjTJPzLpU9P' },
   { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', relay: 'GMExUSD', source: 'jupiter', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
     mint: 'FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy', mainnetMint: 'Xsf9mBktVB9BSU5kf4nHxPq5hCBJ2j2ui3ecFGxPRGc' },
 ].map((m, index) => ({ ...m, index, feedKey: new PublicKey(m.feed) }));
@@ -67,7 +69,7 @@ export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
 export const BOOST = [90, 25, 90, 180, 55];
 /// Markets priced by the program's relay accounts (the others by MagicBlock's oracle).
-export const RELAY_ASSETS = [0, 1, 2, 4];
+export const RELAY_ASSETS = [0, 1, 2, 3, 4];
 /// Retired round slots still on chain until closed.
 export const ROUND_SLOTS = 4;
 export const MAX_PRICE_AGE = 10;
