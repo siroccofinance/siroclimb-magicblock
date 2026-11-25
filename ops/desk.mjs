@@ -40,15 +40,12 @@ function mintTo22(mint, to, authority, amount, decimals) {
 }
 const balance = async (acc) => { const a = await conn.getAccountInfo(acc); return a ? Buffer.from(a.data).readBigUInt64LE(64) : 0n; };
 
-if (!(await conn.getAccountInfo(deskPda()))) {
-  const sig = await send(conn, [ix.initDesk(admin.publicKey, DESK_SPREAD_BPS, MARKETS.map((m) => m.mintKey), MARKETS.map((m) => m.decimals), relayer.publicKey)], [admin], { label: 'init desk' });
-  console.log('desk', deskPda().toBase58(), 'quotes relay key', relayer.publicKey.toBase58(), sig);
-} else {
-  const d = decodeDesk((await conn.getAccountInfo(deskPda())).data);
-  if (!d.mints.every((m, a) => m.equals(MARKETS[a].mintKey)) || d.spreadBps !== DESK_SPREAD_BPS) {
-    console.log('set desk', await send(conn, [ix.setDesk(admin.publicKey, DESK_SPREAD_BPS, MARKETS.map((m) => m.mintKey), MARKETS.map((m) => m.decimals))], [admin], { label: 'set desk' }));
-  }
-}
+// init_desk / set_desk ran once (opened on 25 Nov 2026) and left the program with the other setup
+// instructions; this script now only checks the desk and tops up its inventories and float.
+if (!(await conn.getAccountInfo(deskPda()))) throw new Error(`no desk: a new deployment opens it with the setup build (see ops/setup.mjs)`);
+const d = decodeDesk((await conn.getAccountInfo(deskPda())).data);
+if (!d.mints.every((m, a) => m.equals(MARKETS[a].mintKey)) || d.spreadBps !== DESK_SPREAD_BPS) console.log('warning: the desk\'s mints or spread differ from js/chain/config.js');
+void relayer;
 for (const m of MARKETS) {
   const want = BigInt(INVENTORY[m.ticker]) * 10n ** BigInt(m.decimals);
   for (const [who, owner] of [['desk', deskPda()], ['lending book', lendPda()]]) {

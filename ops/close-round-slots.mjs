@@ -3,6 +3,9 @@
 // still in use is refused by the program (SlotBusy).
 //
 //   node ops/close-round-slots.mjs
+// NOTE: the one-time setup instructions (initialize, init_reserve, init_relay, delegate_relay, init_desk,
+// set_desk, fund_house, close_round_slot) ran on devnet and were removed from the program on 25 Nov 2026
+// to keep its binary small. A new deployment needs the program built from commit 13a9760 for its setup.
 import { ROUND_SLOTS } from '../js/chain/config.js';
 import { roundSlotPda } from '../js/chain/pdas.js';
 import { ix } from '../js/chain/ix.js';
