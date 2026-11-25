@@ -72,24 +72,25 @@ pub const FINISH_GRACE: i64 = 5;
 
 /// MagicBlock's real-time pricing oracle (Pyth Lazer, pushed into the ERs).
 pub const PRICE_ORACLE_PROGRAM_ID: Pubkey = pubkey!("PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd");
-/// Price accounts, in asset order. The xStocks trade around the clock, but
-/// MagicBlock's rollups carry no feed for TSLAx, NVDAx, AAPLx or GMEx and
-/// Pyth's equity feeds stand still outside US hours, so the four xStocks are
-/// relay accounts of this program, `["relay", asset]`, that one named key
-/// keeps fresh with the xStock's own 24/7 market price (see `push_price`).
-/// Gold is MagicBlock's Pyth Lazer XAU/USD feed (346) on the rollup, PDA
-/// `["price_feed", "pyth-lazer", id]` of the pricing oracle.
+/// Price accounts, in asset order: relay accounts of this program,
+/// `["relay", asset]`, that one named key keeps fresh (see `push_price`).
+/// Every market trades around the clock: MagicBlock's rollups carry no feed
+/// for the xStocks (TSLAx, NVDAx, AAPLx, GMEx) and Pyth's equity feeds stand
+/// still outside US hours, and Pyth's XAU/USD closes on weekends, so each
+/// market is priced from its own 24/7 token market (gold: XAUt, Tether Gold).
+/// The oracle branch of `read_feed` (MagicBlock's Pyth Lazer accounts,
+/// `["price_feed", "pyth-lazer", id]`) stays for a market that would use one.
 pub const FEEDS: [Pubkey; ASSETS] = [
     pubkey!("EZzYNjVe8T3SfPiRknV4JA9JTfbfeBfWRoD8CymuUUHu"),
     pubkey!("AuewuoKKM4GSphTixn1oHS4o37jZrFcghgSvUc5dJXF7"),
     pubkey!("BMPPdknGVDDzPsRSwnhHyuR1YwmJ9xM9ij841S96rXY5"),
-    pubkey!("9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn"),
+    pubkey!("CGNjvcw4CJBdYKiV4aGVjqvgmMQfA9pTnz2V2bqzBp8N"),
     pubkey!("2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr"),
 ];
 pub const RELAY_SEED: &[u8] = b"relay";
-/// Markets priced by the relay: the four xStocks (gold reads the oracle).
+/// Markets priced by the relay: all five (the four xStocks and gold).
 pub const fn is_relay(asset: u8) -> bool {
-    asset < 3 || asset == 4
+    (asset as usize) < ASSETS
 }
 /// A price older than this does not move a climb (it holds still), and a
 /// climb cannot start on it (the market is closed).
