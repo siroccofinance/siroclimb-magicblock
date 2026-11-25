@@ -1,11 +1,12 @@
-// xStock price relay. The xStocks trade around the clock, but MagicBlock's
-// rollups carry no TSLAx, NVDAx, AAPLx or GMEx feed and Pyth's equity feeds
-// stand still outside US hours, so the program keeps one relay account per
-// xStock on the rollup that one named key pushes prices into (gasless).
+// Price relay. Every market trades around the clock, but MagicBlock's rollups
+// carry no TSLAx, NVDAx, AAPLx or GMEx feed, Pyth's equity feeds stand still
+// outside US hours and Pyth's XAU/USD closes on weekends, so the program keeps
+// one relay account per market on the rollup that one named key pushes prices
+// into (gasless). Gold is priced as XAUt (Tether Gold), which trades 24/7.
 //
 // Source, all week, one per market so the price never jumps between venues:
-// the mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD: tight
-// books that tick through the night), or Jupiter's price of the Solana mint
+// the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD, XAUt/USD: tight
+// books that tick through the night and the weekend), or Jupiter's price of the Solana mint
 // for GMEx (its Kraken book is thin and wide). The other venue is the sanity
 // check: a price more than 1.5 % away from it (from Kraken's bid-ask range for
 // GMEx) is not pushed, and neither is a market whose source did not answer;
@@ -24,11 +25,15 @@ const MAX_GAP = 0.015;
 const getJson = (u) => fetch(u, { signal: AbortSignal.timeout(1500) }).then((r) => r.json());
 
 async function kraken() {
+  // the xStock pairs are a separate asset class on Kraken (one call each kind; XAUt/USD is a plain pair)
   const pairs = RELAY_ASSETS.map((a) => MARKETS[a].relay);
-  const j = await getJson(`https://api.kraken.com/0/public/Ticker?pair=${pairs.join(',')}&asset_class=tokenized_asset`).catch(() => null);
+  const xs = pairs.filter((p) => /x[A-Z]*USD$/.test(p)), plain = pairs.filter((p) => !xs.includes(p));
+  const q = (list, cls) => (list.length ? getJson(`https://api.kraken.com/0/public/Ticker?pair=${list.join(',')}${cls}`).catch(() => null) : null);
+  const [jx, jp] = await Promise.all([q(xs, '&asset_class=tokenized_asset'), q(plain, '')]);
+  const result = { ...((jx && jx.result) || {}), ...((jp && jp.result) || {}) };
   const out = {};
   for (const a of RELAY_ASSETS) {
-    const t = j && j.result && j.result[MARKETS[a].relay];
+    const t = result[MARKETS[a].relay];
     if (!t) continue;
     const bid = Number(t.b[0]), ask = Number(t.a[0]), mid = (bid + ask) / 2;
     if (bid > 0 && ask >= bid) out[a] = { mid, bid, ask, spread: (ask - bid) / mid };
