@@ -13,6 +13,7 @@
 //   listAssets()                             → Asset[]            { id, name, ticker, kind: 'stock' | 'metal', hours }
 //   marketOpen(assetId)                      → boolean            false outside the market's trading hours
 //   marketOpensAt(assetId)                  → ms | null          next session start of a closed market
+//   boostOf(assetId)                       → number | null      the game's amplification of the market's moves (×)
 //   onNotice(cb)                            → void               cb(message): progress for the player (recovering a climb, slow cash out)
 //   marketWaking(assetId)                   → boolean            open market whose live price is on its way (relay waking up)
 //   subscribePrice(assetId, cb)              → unsubscribe()      cb({ price, ts })
@@ -58,6 +59,8 @@ export const marketOpen = opt('marketOpen', () => true);
 export const marketOpensAt = opt('marketOpensAt', () => null);
 export const marketWaking = opt('marketWaking', () => false);
 export const onNotice = opt('onNotice', () => {});
+export const boostOf = opt('boostOf', () => null);
+export const escrowOfRun = opt('escrowOfRun', () => null);
 export const subscribePrice = (...a) => impl.subscribePrice(...a);
 export const history = (...a) => impl.history(...a);
 export const startRun = (...a) => impl.startRun(...a);

@@ -11,14 +11,15 @@
 //   climbs     stake + delegate on Solana, begin / ticks (crank) / cash out on
 //              the rollup, commit + undelegate, settle on Solana. Solo only.
 import { Connection } from '@solana/web3.js';
+import { Buffer } from 'buffer';
 import {
-  BASE_RPC, BOOST, RELAY_ASSETS, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
+  BASE_RPC, BOOST, DESK_SPREAD_BPS, RELAY_ASSETS, USDC_MINT, ER_EXPLORER, ER_RPC, EXPLORER, LADDER, MARKETS, MAX_PRICE_AGE, ONE_USDC, PACKS, PROGRAM_ID,
   RUN, RUN_SECONDS, STEP_SECONDS, PACK, VAULT, marketIndex,
 } from './chain/config.js';
 import { Climber, SESSION_TOP_UP } from './chain/climber.js';
-import { decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
+import { decodeDesk, decodePrice, decodeProfile, decodeReserve, decodeRun, discriminator } from './chain/codec.js';
 import { createAtaIdempotent, ix } from './chain/ix.js';
-import { reservePda, runPda } from './chain/pdas.js';
+import { ata22Of, ataOf, deskPda, escrowOf, lendPda, reservePda, runPda } from './chain/pdas.js';
 import { errorCode, send, sleep } from './chain/tx.js';
 import { friendlyError } from './chain/errors.js';
 import { handleFor } from './chain/handles.js';
@@ -261,6 +262,9 @@ export async function faucet() {
 // One entry per climb the page knows: { pub (the Run the UI holds), chain, ... }.
 const runs = new Map();
 const proofs = new Map();
+/// Each climb's escrow (the run's token account holding its position), for the explorer.
+const escrows = new Map();
+export const escrowOfRun = (id) => escrows.get(id) || null;
 function addProof(id, label, sig, layer) {
   if (!sig) return;
   const p = proofs.get(id) || [];
@@ -268,7 +272,12 @@ function addProof(id, label, sig, layer) {
   proofs.set(id, p);
 }
 /// Explorer links of every transaction of a climb (integration proof).
-export const proof = (id) => proofs.get(id) || [];
+export const proof = (id) => {
+  const p = proofs.get(id) || [], e = escrows.get(id);
+  return p.length && e ? [...p, { label: 'Position escrow (the tokens)', url: EXPLORER('address', e) }] : p;
+};
+/// The game's amplification of a market's moves (shown as "moves ×90").
+export const boostOf = (assetId) => BOOST[marketIndex(assetId)];
 export const explorer = { tx: (sig, layer) => (layer === 'er' ? ER_EXPLORER('tx', sig) : EXPLORER('tx', sig)), program: () => EXPLORER('address', PROGRAM_ID.toBase58()) };
 
 function pubRun(id, mode, c, extra = {}) {
@@ -279,6 +288,19 @@ function pubRun(id, mode, c, extra = {}) {
     ladder: LADDER.slice(0, (c.top ?? LADDER.length - 1) + 1), stepEvery: STEP_SECONDS, duration: RUN_SECONDS, ...extra,
   };
 }
+const MK = (a) => MARKETS[a];
+/// The climb's real position from its run account (units in the market token, tUSDC notional, real P&L at the exit).
+function positionOf(R) {
+  const c = R.chain, a = R.asset;
+  if (!c || !c.units) return null;
+  const m = MK(a), long = c.side !== 1, sp = (c.spreadBps || DESK_SPREAD_BPS) / 1e4;
+  const last = c.exitFill || (c.lastPrice ? Math.round(c.lastPrice * (long ? 1 - sp : 1 + sp)) : c.fillPrice);
+  const exitUsdc = (c.units * last * 10 ** m.exponent) / 10 ** m.decimals;   // tUSDC (whole), rounding as in the program aside
+  const notional = c.notional / ONE_USDC;
+  const realPnl = c.realPnl && c.status === RUN.SETTLED ? c.realPnl / ONE_USDC : long ? exitUsdc - notional : notional - exitUsdc;
+  return { units: c.units / 10 ** m.decimals, unitsOpen: c.unitsOpen / 10 ** m.decimals, notional, ticker: m.ticker, side: long ? 'long' : 'short',
+    fill: toUsd(a, c.fillPrice), exit: toUsd(a, last), realPnl, escrow: escrowOf(wallet.publicKey, m.mintKey).toBase58() };
+}
 function resultOf(R) {
   const c = R.chain, a = R.asset, stake = R.pub.stake;
   const value = c.value / ONE_USDC;
@@ -288,7 +310,11 @@ function resultOf(R) {
   // a solo climb pays its borrow cost (fee + interest) to the Sirocco Reserve
   const cost = R.pub.pack || !c.startTs ? 0 : (c.cost || Math.min(c.value, borrowCost(c.stake, end - c.startTs, R.top, c.maxStep || 0))) / ONE_USDC;
   const pnl = R.pub.pack ? Math.max(0, value - stake) : value - cost - stake;
+  // the real position: tokens bought (long) or borrowed and sold (short) at each fill, closed at the exit
+  // price less the desk's spread (as settle_run does); the rest of the climb's result is the game's boost
+  const pos = positionOf(R);
   return {
+    position: pos, realPnl: pos ? pos.realPnl : null, boostPnl: pos ? value - stake - pos.realPnl : null, boost: BOOST[a],
     status: st, value: R.pub.pack ? stake + pnl : value - cost, pnl, pnlPct: (value / stake - 1) * 100, maxLeverage: LADDER[c.maxStep || 0], pack: !!R.pub.pack,
     borrowCost: cost, peakBorrow: (R.pub.pack ? stake * LADDER[c.maxStep || 0] : borrowedAt(c.stake, c.maxStep || 0) / ONE_USDC),
     duration: Math.max(0, Math.min(RUN_SECONDS, end - c.startTs)), entryPrice: toUsd(a, c.entryPrice), exitPrice: toUsd(a, c.lastPrice || c.entryPrice),
@@ -306,6 +332,7 @@ function updateOf(R, now = Date.now()) {
   return {
     t, price, step, leverage: LADDER[step], value, pnl: value - stake, pnlPct: (value / stake - 1) * 100,
     risk: Math.min(1, Math.max(0, 1 - value / stake)), status: STATUS[c.status] || 'live', borrowed, borrowCost: cost,
+    holding: c.units ? { units: c.units / 10 ** MARKETS[a].decimals, ticker: MARKETS[a].ticker, side: c.side === 1 ? 'short' : 'long' } : null,
   };
 }
 function priceTick(now) {
@@ -390,7 +417,8 @@ export async function startRun({ mode = 'solo', assetId, side = 'long', stake, p
     const R = { id, mode: 'solo', asset, top: c.top, chain: c, subs: new Set(), done: [], result: null, ms: res.ms };
     R.pub = pubRun(id, 'solo', c, pack ? { pack: PACKS[c.packTier] } : {});
     runs.set(id, R);
-    addProof(id, 'Stake + delegate on Solana', res.sigs.base, 'base');
+    addProof(id, 'Stake + buy the tokens + delegate on Solana', res.sigs.base, 'base');
+    escrows.set(id, escrowOf(wallet.publicKey, MARKETS[asset].mintKey).toBase58());
     addProof(id, 'Begin on the rollup (crank scheduled)', res.sigs.begin, 'er');
     if (!pack) setBal(bal - stake);
     if (pack && profile) profile.packState = PACK.NONE;
@@ -421,16 +449,30 @@ export async function cashOut(id) {
 // ─────────────────────────────────────────────── Sirocco Reserve (lending pool)
 /// The reserve as the UI shows it, plus the connected wallet's position.
 export async function reserveInfo() {
-  const [a, vb] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT)]);
+  const [a, vb, da] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT), base.getAccountInfo(deskPda())]);
   if (!a) return null;
-  const rs = { ...decodeReserve(a.data), vault: Number(vb.value.amount) };
+  const desk = da ? decodeDesk(da.data) : null;
+  // the reserve's cash: the vault, plus what it paid the desk for open long positions, less what it holds for open shorts
+  const cash = Number(vb.value.amount) + (desk ? desk.openLongCost - desk.openShortProceeds : 0);
+  const rs = { ...decodeReserve(a.data), vault: cash };
   const v = reserveView(rs, rs.vault);
   let me = null;
   if (climber) {
     const l = await climber.lender().catch(() => null);
     if (l) me = { shares: l.shares / ONE_USDC, value: valueOf(l.shares, Math.max(0, rs.vault - rs.staked), rs.shares) / ONE_USDC, deposited: l.deposited / ONE_USDC, withdrawn: l.withdrawn / ONE_USDC, rawShares: l.shares };
   }
-  return { ...v, me };
+  return { ...v, me, desk: desk ? await deskInfo(desk) : null };
+}
+/// The Sirocco desk: its inventory of each market token and of tUSDC, what the lending book has to lend.
+async function deskInfo(desk) {
+  const accs = [...MARKETS.map((m) => ata22Of(deskPda(), m.mintKey)), ...MARKETS.map((m) => ata22Of(lendPda(), m.mintKey)), ataOf(deskPda(), USDC_MINT)];
+  const infos = await base.getMultipleAccountsInfo(accs).catch(() => []);
+  const amt = (i) => (infos[i] ? Number(Buffer.from(infos[i].data).readBigUInt64LE(64)) : 0);
+  return {
+    spreadBps: desk.spreadBps, trades: desk.trades, volume: desk.volume / ONE_USDC, openLong: desk.openLongCost / ONE_USDC, openShort: desk.openShortProceeds / ONE_USDC,
+    usdc: amt(accs.length - 1) / ONE_USDC, address: deskPda().toBase58(),
+    markets: MARKETS.map((m, i) => ({ ticker: m.ticker, inventory: amt(i) / 10 ** m.decimals, lendable: amt(MARKETS.length + i) / 10 ** m.decimals, price: feeds[i].price })),
+  };
 }
 /// Lend `amount` tUSDC to the reserve.
 export async function deposit(amount) {
