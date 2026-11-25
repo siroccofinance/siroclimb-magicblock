@@ -511,3 +511,10 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 /* a 24/7 market whose live price is on its way (relay waking up) */
 .market.is-waking .k { color: var(--ink-soft); animation: blink 1.2s ease-in-out infinite; }
 .market[aria-pressed="true"].is-waking .k { color: rgba(43, 33, 26, .65); }
+
+/* reserve panel: the Sirocco desk */
+.reserve__desk h3 { margin: 18px 0 4px; font-size: 15px; }
+.reserve__desk table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin: 6px 0; }
+.reserve__desk th, .reserve__desk td { text-align: right; padding: 4px 6px; border-bottom: 1px solid rgba(43, 33, 26, .08); }
+.reserve__desk th:first-child, .reserve__desk td:first-child { text-align: left; }
+.reserve__desk th { font-weight: 500; color: rgba(43, 33, 26, .6); }

@@ -25,6 +25,7 @@ const signed = v => sgn(v) + nf.format(Math.abs(v));
 const pct = v => sgn(v) + Math.abs(v).toFixed(2) + '%';
 const small = v => (v > 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(3));   // borrow costs are cents
 const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));
+const tokens = v => (v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toPrecision(4));
 const levTxt = x => (x % 1 ? x.toFixed(1) : String(x)) + 'x';
 const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const shortAddr = a => a.slice(0, 4) + '…' + a.slice(-4);
@@ -35,7 +36,7 @@ const byId = Object.fromEntries(assets.map(a => [a.id, a]));
 const C = { asset: store.get('asset', assets[0].id), side: store.get('side', 'long'), stake: store.get('stake', 25) };
 if (!byId[C.asset]) C.asset = assets[0].id;
 let screen = body.dataset.screen || 'intro', busy = false;
-let run = null, upd = null, shownStep = 0, ended = null;
+let run = null, upd = null, shownStep = 0, ended = null, boostNow = null;
 const D = { value: 0, pnl: 0, pct: 0, danger: 0 };           // displayed values, eased toward the feed every frame
 
 function setScreen(s) { screen = s; body.dataset.screen = s; }
@@ -307,6 +308,7 @@ function enterGame(r) {
   if (G) { G.steps = []; G.dangerTo = 0; G.end = null; G.go = (performance.now() - G.t0) / 1000; }
   if (STAIRS) startTrack(r);
   const a = byId[r.assetId];
+  boostNow = api.boostOf(a.id);
   $('#hT').textContent = a.ticker; $('#hSide').textContent = r.side === 'long' ? 'Long' : 'Short'; $('#hSide').className = 'pill is-' + r.side;
   buildLadder(r.ladder); rungs[0].classList.add('is-now');
   spark.entry = r.entryPrice; spark.asset = r.assetId;
@@ -343,8 +345,9 @@ function hudFrame(dt) {
   $('#pP').textContent = pct(D.pct);
   $('#pL').textContent = levTxt(run.ladder[shownStep]);
   $('#cashV').textContent = money(Math.max(0, D.value));
-  if (u) $('#pB').innerHTML = run.pack ? `Playing <b>${money(u.borrowed)} tUSDC</b> of the Sirocco Reserve's money`
-    : u.borrowed > 0 ? `Borrowed <b>${money(u.borrowed)} tUSDC</b> from the Sirocco Reserve · cost so far ${small(u.borrowCost)}` : 'Your own stake only at 1x: borrowing starts at 1.5x';
+  const hold = u && u.holding ? `${u.holding.side === 'short' ? 'Short' : 'Holding'} <b>${tokens(u.holding.units)} ${u.holding.ticker}</b> · ` : '';
+  if (u) $('#pB').innerHTML = hold + (run.pack ? `Playing <b>${money(u.borrowed)} tUSDC</b> of the Sirocco Reserve's money`
+    : u.borrowed > 0 ? `Borrowed <b>${money(u.borrowed)} tUSDC</b> from the Sirocco Reserve · cost so far ${small(u.borrowCost)}` : 'Your own stake only at 1x: borrowing starts at 1.5x');
   const left = Math.max(0, 1 - D.danger);
   $('#sBar').style.transform = `scaleX(${left})`;
   $('#sTxt').textContent = D.danger < 0.02 ? 'Stake safe' : `${Math.round(left * 100)}% of stake left`;
@@ -361,7 +364,7 @@ function hudFrame(dt) {
     if (!next) rungs.forEach(li => li.style.setProperty('--p', 0));
     gaugeFrame(tr);
     const p = u ? u.price : run.entryPrice, ch = (p / run.entryPrice - 1) * 100;
-    $('#hP').textContent = price(p); $('#hC').textContent = pct(ch) + ' since entry';
+    $('#hP').textContent = price(p); $('#hC').textContent = pct(ch) + ' since entry' + (boostNow ? ` · moves ×${boostNow}` : '');
   }
 }
 
@@ -401,6 +404,11 @@ function showResult(res) {
   const a = byId[run.assetId];
   const stats = [['Return', pct(res.pnlPct)], ['Top leverage', levTxt(res.maxLeverage)], ['Time', `${Math.max(1, Math.round(res.duration))}s`],
     [`${a.ticker} entry`, price(res.entryPrice)], ['Exit', price(res.exitPrice)]];
+  if (res.position) {
+    stats.push([`${res.position.side === 'short' ? 'Shorted' : 'Held'} (real tokens)`, `${tokens(res.position.units)} ${res.position.ticker}`]);
+    stats.push(['Position P&L', `${signed(res.realPnl)} tUSDC`]);
+    stats.push([`Game boost ×${res.boost}`, `${signed(res.boostPnl)} tUSDC`]);
+  }
   if (res.peakBorrow > 0) stats.push(['Borrowed up to', `${money(res.peakBorrow)} tUSDC`]);
   if (!res.pack && res.borrowCost != null) stats.push(['Borrow cost paid', `${small(res.borrowCost)} tUSDC`]);
   $('#rS').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
@@ -565,6 +573,10 @@ async function loadReserve() {
   const rows = [['TVL', `${big(R.tvl)} tUSDC`], ['Utilization', `${(R.utilization * 100).toFixed(2)}%`], ['Borrow lines open', `${big(R.lines)} tUSDC`],
     ['Share price', R.sharePrice.toFixed(6)], ['Lender APY', `${R.apy >= 0 ? '' : '−'}${Math.abs(R.apy * 100).toFixed(2)}%`], ['Borrow APR + fee', `${R.aprBorrow}% + ${(R.feeBps / 100).toFixed(1)}%`]];
   $('#resStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  const D = R.desk;
+  $('#resDesk').innerHTML = D ? `<h3>Sirocco desk</h3><p class="fine">Every climb holds real tokens: longs buy them from the desk into the climb's escrow, shorts borrow them from the lending book and sell them to the desk, at the live price ±${(D.spreadBps / 100).toFixed(2)}%.</p>`
+    + `<table><thead><tr><th>Token</th><th>Desk</th><th>Lendable</th></tr></thead><tbody>${D.markets.map(m => `<tr><td>${m.ticker}</td><td>${big(m.inventory)}</td><td>${big(m.lendable)}</td></tr>`).join('')}</tbody></table>`
+    + `<p class="fine">tUSDC float ${big(D.usdc)} · in open longs ${money(D.openLong)} · open shorts ${money(D.openShort)} · ${D.trades} trades, ${big(D.volume)} tUSDC traded</p>` : '';
   $('#resMe').innerHTML = R.me && R.me.shares > 0 ? `You lend <b>${money(R.me.value)} tUSDC</b> (${money(R.me.shares)} shares).`
     : api.account() ? 'You have nothing lent yet.' : 'Connect a wallet to lend.';
   resLast = R;
