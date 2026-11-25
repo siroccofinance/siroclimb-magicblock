@@ -75,7 +75,7 @@ const haptic = p => { try { navigator.vibrate?.(p); } catch {} };
 // ── scene
 const stage = $('#stage');
 let repose = () => {}, wantCard = false, card = null;
-let TK = null, sc = null, idleT = 0, last = performance.now(), G = null, live = false, syncing = true;
+let TK = null, sc = null, idleT = 0, last = performance.now(), G = null, live = false;
 const film = $('#film');
 const cover = () => ({ aspect: 16 / 9, x: mobile() ? 0.64 : 0.6, y: 0.3 });
 const dpr = () => Math.min(devicePixelRatio || 1, 1.5);
@@ -86,14 +86,12 @@ function initScene() {
   if (innerHeight > innerWidth) { sc.L.FOLLOW_T = 0.45; sc.L.DOLLY = 0.28; }   // portrait: lock on sooner, stay further back
   stage.appendChild(sc.canvas);
   sc.setSize(innerWidth, innerHeight, dpr(), cover());
-  idleT = film.currentTime || 0;
   if (screen !== 'intro') park(0.15);
-  // two drawn frames, then the live scene fades in over the (still synced) film, which then stops
+  // two drawn frames, then the live scene fades in
   let n = 0;
   const reveal = () => {
     if (++n < 3) return requestAnimationFrame(reveal);
     sc.canvas.classList.add('is-live'); live = true; $('#wash').classList.remove('is-on');
-    setTimeout(() => { syncing = false; film.pause(); }, 700);
   };
   requestAnimationFrame(reveal);
 }
@@ -106,7 +104,7 @@ function park(hop = null, braked = true) {
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  idleT = syncing && !film.paused && film.currentTime ? film.currentTime : idleT + dt;   // locked to the film until it is hidden
+  idleT += dt;
   if (sc) {
     if (TK) {
       TK.danger += (TK.dangerTo - TK.danger) * (1 - Math.exp(-dt * 4));
@@ -600,14 +598,17 @@ addEventListener('resize', () => { if (sc) sc.setSize(innerWidth, innerHeight, d
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
 (async function boot() {
+  // the live scene from the first frame (it draws the current coin), before the chain client is up;
+  // the pre-rendered film only as a fallback (no WebGL, or reduced motion)
+  if (!reduce) initScene();
+  if (!sc) {
+    $('#wash').classList.remove('is-on'); stage.classList.add('is-film'); film.preload = 'auto';
+    if (!reduce) film.play().catch(() => {});
+  }
+  requestAnimationFrame(frame);
   await api.init();
   renderWallet(); renderBalance(api.balance()); renderLobby();
-  const start = () => { if (sc || reduce) return; initScene(); if (!sc) $('#wash').classList.remove('is-on'); };
-  if (reduce) $('#wash').classList.remove('is-on');
-  if (screen !== 'intro' || film.readyState >= 2) start(); else film.addEventListener('loadeddata', start, { once: true });
-  setTimeout(start, screen === 'intro' ? 2500 : 0);           // film blocked or slow: start anyway
-  if (screen !== 'intro') { film.pause(); syncing = false; maybeRules(1200); }
-  requestAnimationFrame(frame);
+  if (screen !== 'intro') maybeRules(1200);
   setInterval(() => { if (screen === 'lobby') { renderGo(); renderClosed(); } }, 250);
   setInterval(() => { if (screen === 'lobby') renderClosed(); }, 1000);
   renderPack();
@@ -620,8 +621,7 @@ function toLobby() {
   if (screen !== 'intro') return;
   sound.unlock(); sound.tick();
   body.classList.add('from-intro');
-  syncing = false;
-  if (sc && live) { film.pause(); park(0.06, false); }
+  if (sc && live) park(0.06, false);
   setScreen('lobby'); renderLobby();
   setTimeout(() => body.classList.remove('from-intro'), 2200);
   maybeRules(2000);
