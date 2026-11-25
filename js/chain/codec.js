@@ -98,9 +98,14 @@ export function decodeProfile(data) {
   return p;
 }
 
-/// A market's price account: a MagicBlock Pyth Lazer feed.
+export function decodeRelay(data) {
+  const r = new Reader(data);
+  return { market: r.u8(), exponent: r.i32(), raw: r.i64(), ts: r.i64(), updates: r.u64(), relayer: r.key() };
+}
+
+/// A market's price account: our xStock relay account, or a MagicBlock Pyth Lazer feed.
 export function decodePrice(data) {
-  return decodeFeed(data);
+  return isAccount('RelayFeed', data) ? decodeRelay(data) : decodeFeed(data);
 }
 
 /// A MagicBlock Pyth Lazer feed account: price i64 at 73, publish time i64 at 93.

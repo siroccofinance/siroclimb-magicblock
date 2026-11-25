@@ -11,6 +11,8 @@ export const configPda = () => pda([s('config')]);
 export const faucetPda = (user) => pda([s('faucet'), user.toBuffer()]);
 export const profilePda = (user) => pda([s('profile'), user.toBuffer()]);
 export const runPda = (player) => pda([s('run'), player.toBuffer()]);
+/// An xStock market's relay price account (on the rollup).
+export const relayPda = (market) => pda([s('relay'), Buffer.from([market])]);
 /// The Sirocco Reserve (lending pool) and a lender's position in it.
 export const reservePda = () => pda([s('reserve')]);
 export const lenderPda = (owner) => pda([s('lender'), owner.toBuffer()]);
