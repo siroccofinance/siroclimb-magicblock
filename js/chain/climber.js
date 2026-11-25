@@ -153,7 +153,9 @@ export class Climber {
   async settleRun(player = this.me) {
     const a = await this.waitOnBase(runPda(player));
     const asset = decodeRun(a.data).asset;
-    return send(this.base, [ix.settleRun(this.actor.publicKey, player, asset)], [this.actor], { label: 'settle run' });
+    // a climb started before an upgrade that grew the run account: grow it in the same transaction
+    const grow = a.data.length < RUN_SIZE ? [ix.growRun(this.actor.publicKey, player)] : [];
+    return send(this.base, [...grow, ix.settleRun(this.actor.publicKey, player, asset)], [this.actor], { label: 'settle run' });
   }
 
   // ----------------------------------------------------- Sirocco Reserve
