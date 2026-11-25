@@ -72,4 +72,15 @@ if (!(await conn.getAccountInfo(reservePda()))) {
   const sig = await send(conn, [ix2.initReserve(admin.publicKey, vaultKey)], [admin], { label: 'open reserve' });
   console.log('Sirocco Reserve', reservePda().toBase58(), 'opened, the deployer is its first lender', sig);
 }
+// xStock relay accounts (TSLAx, NVDAx, AAPLx), delegated to the rollup, pushed by the relay key.
+{
+  const { relayPda } = await import('../js/chain/pdas.js');
+  const { MARKETS, RELAY_ASSETS, ER_VALIDATOR } = await import('../js/chain/config.js');
+  const relayer = namedKeypair('relayer');
+  for (const a of RELAY_ASSETS) {
+    if (await conn.getAccountInfo(relayPda(a))) continue;
+    const sig = await send(conn, [ix2.initRelay(admin.publicKey, a, MARKETS[a].exponent, relayer.publicKey), ix2.delegateRelay(admin.publicKey, a, ER_VALIDATOR)], [admin], { label: `relay ${MARKETS[a].id}` });
+    console.log('relay', MARKETS[a].id, relayPda(a).toBase58(), 'relayer', relayer.publicKey.toBase58(), sig);
+  }
+}
 console.log('setup done');

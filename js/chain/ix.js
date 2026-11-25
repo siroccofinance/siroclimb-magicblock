@@ -9,7 +9,7 @@ import {
 } from './config.js';
 import { encodeIx, ixAccounts } from './codec.js';
 import {
-  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, lenderPda, profilePda, reservePda, roundSlotPda, runPda,
+  ataOf, bufferPda, configPda, delegationMetadataPda, delegationRecordPda, faucetPda, lenderPda, profilePda, relayPda, reservePda, roundSlotPda, runPda,
   vrfIdentityPda,
 } from './pdas.js';
 import * as PDAS from './pdas.js';
@@ -81,10 +81,19 @@ export const ix = {
   settleRun: (caller, player) =>
     build('settle_run', { caller, run: runPda(player), profile: profilePda(player), player_usdc: ataOf(player, mint()), vault: VAULT }),
 
+  initRelay: (admin, market, exponent, relayer) => build('init_relay', { admin, relay: relayPda(market) }, { market, exponent, relayer }),
+  delegateRelay: (admin, market, validator) => {
+    const relay = relayPda(market);
+    return build('delegate_relay', {
+      admin, relay, buffer_relay: bufferPda(relay), delegation_record_relay: delegationRecordPda(relay), delegation_metadata_relay: delegationMetadataPda(relay),
+    }, { market }, validatorMeta(validator));
+  },
+
   openPack: (payer, player, sessionToken = null) => build('open_pack', { payer, player, profile: profilePda(player), session_token: sessionToken }),
 
   // ------------------------------------------------------------ the rollup
   beginRun: (payer, player, asset, crank = true) => build('begin_run', { payer, run: runPda(player), feed: feedOf(asset) }, { crank }),
+  pushPrice: (relayer, market, price, publishTs) => build('push_price', { relayer, relay: relayPda(market) }, { price, publish_ts: publishTs }),
   tickRun: (player, asset) => build('tick_run', { run: runPda(player), feed: feedOf(asset) }),
   cashOut: (payer, player, asset) => build('cash_out', { payer, run: runPda(player), feed: feedOf(asset) }),
   finishRun: (payer, player, asset) => build('finish_run', { payer, run: runPda(player), feed: feedOf(asset) }),

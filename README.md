@@ -4,7 +4,7 @@
 
 Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold), go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Leverage is a real loan: past 1x the rest of the position is borrowed from the **Sirocco Reserve**, a tUSDC lending pool anyone can lend to.
 
-Built for MagicBlock's Solana Blitz v10 (Entertainment Finance). Everything runs on **Solana devnet + MagicBlock's devnet Ephemeral Rollup** with live Pyth Lazer prices pushed into the rollup by MagicBlock.
+Built for MagicBlock's Solana Blitz v10 (Entertainment Finance). Everything runs on **Solana devnet + MagicBlock's devnet Ephemeral Rollup**. The xStocks trade around the clock and so does the game: their live 24/7 market price is relayed into the rollup; gold reads MagicBlock's Pyth Lazer feed.
 
 ## Why MagicBlock
 
@@ -53,7 +53,7 @@ Rounds (player-versus-player pots, no borrowing) were removed before the reserve
 |---|---|---|
 | **Ephemeral Rollups** | `delegate_run`, `cash_out`, `finish_run` | The `Run` account is delegated for the minute of play. Price ticks, leverage steps, the bust and every cash out run on the rollup at zero fee; the cash out itself commits and undelegates. Money never leaves Solana. |
 | **Cranks** (`ScheduleTask`) | `begin_run` → `tick_run` | The climb ticks itself every 500 ms on the rollup (about 120 ticks per climb). No off-chain ticking loop. Ticks are permissionless and idempotent. |
-| **Real-time price oracle** | `begin_run`, `tick_run`, `cash_out`, `finish_run` | MagicBlock's Pyth Lazer feeds on the rollup (`PriCems5…`): TSLA 1435, NVDA 1314, AAPL 922, GME 1160 (the xStocks), XAU/USD 346. Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
+| **Real-time price oracle** | `begin_run`, `tick_run`, `cash_out`, `finish_run` | Gold reads MagicBlock's Pyth Lazer XAU/USD feed on the rollup (`PriCems5…`, 346). The xStocks read the program's relay accounts on the rollup (below). Addresses pinned per market, owner checked, staleness bound: a stale price holds the climb still and blocks new climbs (market closed). |
 | **VRF** | `open_pack` → `apply_pack` | The tier of every leverage pack is drawn by MagicBlock's VRF; callbacks are only accepted from the VRF program's scoped identity. |
 | **Session keys** (`session-keys`, `SessionTokenV2`) | `start_run`, `open_pack`, every rollup action | The wallet approves once. A browser-held session key, authorised by a `SessionTokenV2` and approved as SPL spender of the wallet's test USDC, signs every stake, cash out and pack with no wallet prompt (wallets cannot sign rollup transactions anyway). |
 
@@ -61,16 +61,17 @@ Rounds (player-versus-player pots, no borrowing) were removed before the reserve
 
 | Market | Price | When it moves |
 |---|---|---|
-| TSLAx, NVDAx, AAPLx, GMEx | Pyth Lazer US equity feeds on the rollup (the xStocks track their share 1:1) | Sun 20:00 to Fri 20:00 New York: pre-market, regular, post-market and overnight sessions |
-| Gold (XAU/USD) | Pyth Lazer metal feed on the rollup | Sun 18:00 to Fri 17:00 New York, with a daily hour off |
+| TSLAx, NVDAx, AAPLx | the xStock's own market, around the clock: mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD), relayed into the rollup | 24/7 |
+| GMEx | Jupiter's price of the GMEx mint on Solana (its Kraken book is thin and wide), eased in at most 0.15 % a second, relayed into the rollup | 24/7 |
+| Gold (XAU/USD) | MagicBlock's Pyth Lazer metal feed on the rollup | Sun 18:00 to Fri 17:00 New York, with a daily hour off |
 
-Outside its sessions a market shows **closed** in the lobby. The front checks Pyth's published session schedules (New York time, holidays included: stocks close on Thanksgiving until the overnight session) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed. The program enforces the same sessions on chain (`hours.rs`: New York time, daylight time and holidays included, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday 20:00 bell): no stake and no start outside a session (`MarketClosed`). It also refuses a stale price (`StalePrice`) and holds a live climb still while its price is stale. On weekends every market is closed.
+**Why a relay.** The xStocks are tokens that trade around the clock, nights and weekends. Pyth's US equity feeds, which MagicBlock pushes into the rollups, stand still outside US hours (checked 24 Nov 2026, 18:30 New York: TSLA, NVDA, AAPL, GME fresh but frozen), and MagicBlock's rollups carry none of Pyth's 24/7 xStock feeds for these four (`Crypto.TSLAX/USD` 1847, `NVDAX` 1833, `AAPLX` 1792; `GMEX` 3387 is not live yet; only SPYX is on the rollup), and Pyth's Hermes API refuses keyless reads. So the program keeps one relay account per xStock on the rollup (`["relay", asset]`, `init_relay`, `delegate_relay`), and only the relay key named at init can `push_price` into it (gasless on the rollup; prices may not go back in time or come from the future). `/api/relay` pushes all four in one rollup transaction, at most about once a second, whenever a browser has the game open (the page asks every second), and the optional keeper does the same. Each push reads both venues: the market's own source, and the other one as a sanity check (a price more than 1.5 % away from Jupiter, or a Jupiter price outside Kraken's bid-ask range by 1.5 %, is not pushed). A relay that stops ages like any feed: past `MAX_PRICE_AGE` (10 s) the program holds a live climb still and refuses new ones. Swapping the source for signed Pyth updates is one function in `js/chain/relay.js`.
 
-Why GMEx: Amazon, Meta, Microsoft and Alphabet were the first picks for a fourth stock, but MagicBlock pushes none of them into its rollups (checked on devnet-eu, -us, -as and the mainnet rollups on 24 Nov 2026). The only other US equity feed on devnet-eu is GameStop (Pyth Lazer 1160, fresh every 50 to 200 ms, same sessions as the other stocks), and GameStop trades on Solana as the GMEx xStock, so every market is read the same way: a MagicBlock price account, no relay, no trusted key.
+Gold shows **closed** in the lobby outside its sessions: the front checks Pyth's published schedule (New York time, holidays included) as well as the price's freshness, because Pyth keeps publishing a frozen price with a fresh timestamp while a market is closed, and the program enforces the same sessions on chain (`hours.rs`, tested against the front's answers on 3,000 instants and in LiteSVM with the clock set to a Saturday, Thanksgiving and a Friday bell): no stake and no start outside a session (`MarketClosed`). The xStocks are open all week (`KIND_ALWAYS`); LiteSVM plays TSLAx and GMEx climbs on a Saturday and refuses a climb on a relay price a minute old (`StalePrice`).
 
 The charts open full: the last 90 seconds of each market are read back from its price account's update transactions on the rollup (keyless, same source as the live price; `js/chain/history.js`).
 
-Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies, tuned from the feeds' per-second volatility (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GMEx 55; GameStop ticks a cent at a time and moves about 0.7 bp a second, so 55 gives it the same boosted swing as AAPLx and NVDAx). A boost is a game rule, stated in the rules sheet.
+Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GMEx 55). Measured on the 24/7 sources at night (24 Nov 2026, 19:00 New York): the xStocks move about 1 bp a second in a few ticks a minute, so a minute's climb still swings by several percent at 1.5x. A boost is a game rule, stated in the rules sheet.
 
 The xStocks have no devnet mints, so devnet mirrors were created with the same name, symbol and decimals (Token-2022, 8 decimals); see [DEPLOYMENTS.md](DEPLOYMENTS.md).
 
@@ -90,7 +91,7 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 
 **Wallet state in sight.** The wallet menu shows the on-chain handle (renamable), until when the game session key is valid and how many climbs its fuel still pays for; the balance reads "–" until a wallet connects; errors are short sentences ("This market is outside its trading hours, pick another one"), never raw transaction errors.
 
-**Serverless.** Nothing has to run on our side for the game to work: every step of a climb is permissionless, and the page itself pushes each one along (autopilot). The optional keeper (`npm run keeper`) only sweeps climbs left on the rollup by closed tabs. The serverless routes are a devnet SOL faucet for new wallets and the share cards below.
+**Serverless.** No server has to run for the game to work: every step of a climb is permissionless and the page itself pushes each one along (autopilot), and the xStock prices are relayed by `/api/relay` while a browser has the game open. The optional keeper (`npm run keeper`) relays all the time and sweeps climbs left on the rollup by closed tabs. The serverless routes are a devnet SOL faucet for new wallets and the share cards below.
 
 **Share on X.** After a climb, Share opens X with a link like `https://siroclimb.sirocco.finance/s/<token>`. `/api/share` reads the player's run account (settled, back on Solana) and the matching record of their profile, and signs that result with a server secret; the `/s/` page carries `twitter:card = summary_large_image` and an `og:image` drawn by `/api/card` (1200 x 630 PNG: the coin, the result, return, top leverage, stake, time, market and side; SVG + Inter rendered by resvg). A card cannot claim a climb nobody played, and a changed token is refused. **Save image** downloads the in-game picture of the end of the climb. People who open the link land on the game.
 
@@ -123,6 +124,7 @@ The site is static (no build step: `index.html`, `play.css`, `js/`, `assets/`); 
 | Variable | What |
 |---|---|
 | `FAUCET_SECRET_KEY` | JSON array of a funded devnet keypair (`~/.config/siroclimb/solana/faucet.json`) |
+| `RELAYER_SECRET_KEY` | JSON array of the relay keypair (`~/.config/siroclimb/solana/relayer.json`), the only key that can push xStock prices |
 | `SHARE_SECRET` | random string that signs share links (`~/.config/siroclimb/solana/share-secret.txt` for the dev server) |
 
 Without them the game still works: new wallets need devnet SOL from faucet.solana.com, and Share falls back to the share sheet or the clipboard.
@@ -149,7 +151,7 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 | Suite | Command | Result |
 |---|---|---|
 | Game rules and sessions (Rust unit) | `npm run chain:test` | 17 / 17 (ladder, payout cap, borrow cost, share math), including 3,000 instants matched against the front's schedule reader |
-| Market hours and retired round slots on the built program (LiteSVM) | `npm run test:hours` | 15 / 15 |
+| Market hours, 24/7 xStocks and retired round slots on the built program (LiteSVM) | `npm run test:hours` | 25 / 25 |
 | Sirocco Reserve on the built program (LiteSVM) | `npm run test:reserve` | 24 / 24: the bankroll becomes the admin's shares, deposit and withdraw at the share price, 4 x stake reserved and a 3 x stake line per climb, `ReserveFull`, `NotEnoughLiquidity`, `BadShares`, settlement charges exactly the front's borrow cost, lenders' positions move with the climb, `grow_run` on an old run account |
 | On-chain battery | `npm run battery -- 24 2` | with the Sirocco Reserve (`-- 8 1`): **156 / 156**: 3 lenders deposit and withdraw at the share price, 8 simultaneous climbs on all five markets each checked for its reservation, borrow line and borrow cost, refusals, VRF packs, the reserve square at the end; solo only before it: 118 / 118; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, Share opens X with a signed `/s/` link (summary_large_image, card PNG 200), 0 console errors |
@@ -187,7 +189,7 @@ chain/programs/siroclimb/src/
   lib.rs     instructions (Solana and rollup), account contexts, price reading
   game.rs    climb, profile and pack rules, unit tests
   reserve.rs the Sirocco Reserve: shares, exposure, borrow lines, borrow cost, unit tests
-  hours.rs   US equity and gold sessions, New York time
+  hours.rs   gold's sessions (and US equity hours), New York time; the xStocks are 24/7
   token.rs   minimal SPL token helpers (no anchor-spl: half the binary, half the rent)
 js/chain/    isomorphic client (browser + node): config, PDAs, IDL builders, decoders,
              sending, session keys, wallets, handles, the reserve's math, Climber

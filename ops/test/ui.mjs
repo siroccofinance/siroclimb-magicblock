@@ -10,6 +10,7 @@ const profileDir = process.env.FRESH ? undefined : 'out/chrome-profile';
 const b = await puppeteer.launch({ userDataDir: profileDir, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const pg = await b.newPage();
 const errs = [];
+let shared = false;
 pg.on('pageerror', (e) => { errs.push(e.message); console.log('ERR', e.message); });
 pg.on('console', (c) => { if (c.type() === 'error') { errs.push(c.text()); console.log('CONSOLE', c.text()); } });
 await pg.setViewport({ width: 1440, height: 900 });
@@ -30,7 +31,7 @@ async function until(fn, ms = 60000, label = '') {
   while (Date.now() - t < ms) { if (await fn()) return true; await wait(250); }
   throw new Error('timeout ' + label);
 }
-await pg.goto(URL + '#play', { waitUntil: 'networkidle2' });
+await pg.goto(URL + '#play', { waitUntil: 'load' });   // the page keeps polling prices and the relay: never network-idle
 await wait(2500);
 if (await pg.$('.sheet:not([hidden]) .sheet__ok')) await pg.click('.sheet__ok');
 await wait(800);
@@ -107,7 +108,7 @@ if (FLOW === 'menu') {
   say('balance', await text('#bal'));
   // share: X opens with a signed /s/ link whose page carries the result card
   const tabP = new Promise((r) => b.once('targetcreated', r));
-  const before = errs.length;
+  shared = true;   // from here, headless Chrome's 403 from x.com (the tab Share opens) reports into this page
   await pg.click('#share');
   const tab = await tabP;
   let link = null;
@@ -116,11 +117,11 @@ if (FLOW === 'menu') {
   const meta = (k) => (new RegExp(`(?:property|name)="${k}" content="([^"]+)"`).exec(page) || [])[1];
   const img = await fetch(meta('og:image').replace(/^https:\/\/[^/]+/, URL.replace(/\/$/, '')));
   say('share', link.slice(0, 40) + '…', '|', meta('twitter:card'), '|', meta('og:title'), '| card', img.status, img.headers.get('content-type'));
-  // headless Chrome gets a 403 from x.com in the tab Share opened; that tab reports into this page
-  errs.splice(before, errs.length - before, ...errs.slice(before).filter((e) => !/status of 403/.test(e)));
   if (meta('twitter:card') !== 'summary_large_image' || img.status !== 200) errs.push('share card');
   await pg.screenshot({ path: 'out/ui-5share.png' });
 }
+const real = errs.filter((e) => !(shared && /status of 403/.test(e)));
+errs.length = 0; errs.push(...real);
 await b.close();
 say(errs.length ? `FAIL ${errs.length} console errors` : 'OK, 0 console errors');
 process.exit(errs.length ? 1 : 0);

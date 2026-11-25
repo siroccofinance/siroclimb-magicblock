@@ -9,7 +9,7 @@
 import { LiteSVM } from 'litesvm';
 import { Keypair, LAMPORTS_PER_SOL, Transaction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
+import { MARKETS, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
 import { ataOf, configPda, lenderPda, reservePda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { RUN_SIZE, decodeLender, decodeReserve, decodeRun, discriminator } from '../../js/chain/codec.js';
@@ -40,10 +40,11 @@ setVault(200 * U); // a small bankroll, so the guards bind
 
 const TSLA = 0;
 let price = 38_600_000n;
+// TSLAx is priced by the program's relay account (RelayFeed: market, exponent, price, publish_ts, updates, relayer, bump)
 function setPrice(ts) {
-  const d = Buffer.alloc(134);
-  d.writeBigInt64LE(price, 73); d.writeBigInt64LE(BigInt(ts), 93);
-  svm.setAccount(MARKETS[TSLA].feedKey, { lamports: Number(rent(134)), data: d, owner: PRICE_ORACLE_PROGRAM_ID, executable: false });
+  const d = Buffer.alloc(70);
+  discriminator('RelayFeed').copy(d, 0); d[8] = TSLA; d.writeInt32LE(-5, 9); d.writeBigInt64LE(price, 13); d.writeBigInt64LE(BigInt(ts), 21);
+  svm.setAccount(MARKETS[TSLA].feedKey, { lamports: Number(rent(70)), data: d, owner: PROGRAM_ID, executable: false });
 }
 function at(ts) {
   const c = svm.getClock();

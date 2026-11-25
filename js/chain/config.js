@@ -34,24 +34,27 @@ export const ATA_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efT
 export const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd');
 
-/// The five markets, in on-chain order: four tokenized stocks and gold, all
-/// priced by MagicBlock's Pyth Lazer feeds on the rollup
-/// (PDA("price_feed", "pyth-lazer", lazerId) of the oracle program,
-/// `exponent` from Pyth Lazer's symbol list).
+/// The five markets, in on-chain order: four xStocks and gold.
 ///
-/// `hours`: when the price moves. Pyth's US equity feeds cover pre-market,
-/// regular, post-market and overnight sessions (Sun 20:00 to Fri 20:00 New
-/// York); gold trades Sun 18:00 to Fri 17:00 with a daily hour off. Outside
-/// those, the market shows as closed.
+/// The xStocks trade around the clock, so their prices must move all week.
+/// MagicBlock's rollups carry no TSLAx, NVDAx, AAPLx or GMEx feed, and Pyth's
+/// equity feeds stand still outside US hours: the four xStocks read the
+/// program's relay accounts (`["relay", asset]`), kept fresh with the xStock's
+/// own 24/7 market (js/chain/relay.js: mid of Kraken's xStock book `relay`, or
+/// for GMEx, `source: 'jupiter'`, Jupiter's price of the Solana mint
+/// `mainnetMint`) by /api/relay and the keeper. Gold is MagicBlock's XAU/USD feed (PDA("price_feed", "pyth-lazer", lazerId)).
+///
+/// `hours`: when the price moves. '24/7' for the xStocks; gold trades Sun 18:00
+/// to Fri 17:00 New York with a daily hour off, and shows as closed outside.
 export const MARKETS = [
-  { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', lazerId: 1435, exponent: -5, feed: '8L7ccCxTBZaLsMMdhAod5fFnpdEWGSDPW4y1td7y3y8N', hours: 'us-equity',
+  { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', relay: 'TSLAxUSD', exponent: -5, feed: 'EZzYNjVe8T3SfPiRknV4JA9JTfbfeBfWRoD8CymuUUHu', hours: '24/7',
     mint: 'EwksJmGYpSHWwznpeX8XGqHPBEhqyH4nHX92WH7uUz8g', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
-  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', lazerId: 1314, exponent: -5, feed: '3AD13yFytFWiLQbcGsnEXDeWZ9GZezSx6Y3NqZRoJMaC', hours: 'us-equity',
+  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', relay: 'NVDAxUSD', exponent: -5, feed: 'AuewuoKKM4GSphTixn1oHS4o37jZrFcghgSvUc5dJXF7', hours: '24/7',
     mint: '4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
-  { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', lazerId: 922, exponent: -5, feed: 'B3P5AnSryJKeMk3FZcXsmpKVqoNmGYQE1rfE5KaoZNt1', hours: 'us-equity',
+  { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', relay: 'AAPLxUSD', exponent: -5, feed: 'BMPPdknGVDDzPsRSwnhHyuR1YwmJ9xM9ij841S96rXY5', hours: '24/7',
     mint: 'yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
   { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', lazerId: 346, exponent: -3, feed: '9Eko45pM9kMQpz9N5d6Rcki8FMKUeyFb1tWhvixhBHBn', hours: 'metal' },
-  { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', lazerId: 1160, exponent: -5, feed: 'BjxWySYsKPbDfsNxLRPocTEB55RRPbAuWqMqUJHVgqpE', hours: 'us-equity',
+  { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', relay: 'GMExUSD', source: 'jupiter', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
     mint: 'FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy', mainnetMint: 'Xsf9mBktVB9BSU5kf4nHxPq5hCBJ2j2ui3ecFGxPRGc' },
 ].map((m, index) => ({ ...m, index, feedKey: new PublicKey(m.feed) }));
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);
@@ -63,6 +66,8 @@ export const LADDER = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
 export const BOOST = [90, 25, 90, 180, 55];
+/// Markets priced by the program's relay accounts (the others by MagicBlock's oracle).
+export const RELAY_ASSETS = [0, 1, 2, 4];
 /// Retired round slots still on chain until closed.
 export const ROUND_SLOTS = 4;
 export const MAX_PRICE_AGE = 10;

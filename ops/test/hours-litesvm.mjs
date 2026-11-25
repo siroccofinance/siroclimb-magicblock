@@ -10,10 +10,10 @@
 import { LiteSVM } from 'litesvm';
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
+import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, RELAY_ASSETS, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
 import { configPda, ataOf, roundSlotPda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
-import { decodeRun } from '../../js/chain/codec.js';
+import { decodeRun, discriminator } from '../../js/chain/codec.js';
 
 const svm = new LiteSVM();
 svm.addProgramFromFile(PROGRAM_ID, new URL('../../chain/target/deploy/siroclimb.so', import.meta.url).pathname);
@@ -35,11 +35,20 @@ function tokenAccount(mint, owner, amount) {
 svm.setAccount(USDC_MINT, { lamports: Number(rent(82)), data: tokenMint(configPda()), owner: TOKEN_PROGRAM_ID, executable: false });
 svm.setAccount(VAULT, { lamports: Number(rent(165)), data: tokenAccount(USDC_MINT, configPda(), 1_000_000_000_000), owner: TOKEN_PROGRAM_ID, executable: false });
 
-const TSLA = 0;
+const TSLA = 0, XAU = 3, GME = 4;
+// every market priced at `ts`: the xStock relay accounts (ours) and gold's oracle feed
 function setPrice(ts) {
-  const d = Buffer.alloc(134);
-  d.writeBigInt64LE(38_600_000n, 73); d.writeBigInt64LE(BigInt(ts), 93);
-  svm.setAccount(MARKETS[TSLA].feedKey, { lamports: Number(rent(134)), data: d, owner: PRICE_ORACLE_PROGRAM_ID, executable: false });
+  for (let a = 0; a < MARKETS.length; a++) {
+    if (RELAY_ASSETS.includes(a)) {
+      const d = Buffer.alloc(70);
+      discriminator('RelayFeed').copy(d, 0); d[8] = a; d.writeInt32LE(-5, 9); d.writeBigInt64LE(38_600_000n, 13); d.writeBigInt64LE(BigInt(ts), 21);
+      svm.setAccount(MARKETS[a].feedKey, { lamports: Number(rent(70)), data: d, owner: PROGRAM_ID, executable: false });
+    } else {
+      const d = Buffer.alloc(134);
+      d.writeBigInt64LE(38_600_000n, 73); d.writeBigInt64LE(BigInt(ts), 93);
+      svm.setAccount(MARKETS[a].feedKey, { lamports: Number(rent(134)), data: d, owner: PRICE_ORACLE_PROGRAM_ID, executable: false });
+    }
+  }
 }
 function at(ts) {
   const c = svm.getClock();
@@ -74,33 +83,54 @@ ok('the Sirocco Reserve opens on the bankroll', r.ok, r.logs.slice(-2).join(' ')
 r = send([createAtaIdempotent(player.publicKey, player.publicKey), ix.faucet(player.publicKey), ix.initProfile(player.publicKey, 'nomad_trader')], [player]);
 ok('player: token account, faucet, profile', r.ok, r.logs.slice(-2).join(' '));
 
-const stake = (label, when, expectCode) => {
+const stake = (label, when, expectCode, asset = XAU, who = player) => {
   at(utc(when));
-  const res = send([ix.startRun(player.publicKey, player.publicKey, { asset: TSLA, side: 0, stake: 10_000_000n })], [player]);
+  const res = send([ix.startRun(who.publicKey, who.publicKey, { asset, side: 0, stake: 10_000_000n })], [who]);
   if (expectCode) ok(`${label}: stake refused with ${expectCode}`, !res.ok && res.code === expectCode, `code ${res.code}`);
   else ok(`${label}: stake accepted`, res.ok, res.logs.slice(-3).join(' '));
   return res.ok;
 };
-const begin = (label, when, expectCode) => {
+const begin = (label, when, expectCode, asset = XAU, who = player) => {
   at(utc(when));
-  const res = send([ix.beginRun(player.publicKey, player.publicKey, TSLA, false)], [player]);
+  const res = send([ix.beginRun(who.publicKey, who.publicKey, asset, false)], [who]);
   if (expectCode) ok(`${label}: begin refused with ${expectCode}`, !res.ok && res.code === expectCode, `code ${res.code}`);
   else ok(`${label}: begin accepted`, res.ok, res.logs.slice(-3).join(' '));
   return res.ok;
 };
-const runStatus = () => decodeRun(Buffer.from(svm.getAccount(runPda(player.publicKey)).data)).status;
+const runStatus = (who = player) => decodeRun(Buffer.from(svm.getAccount(runPda(who.publicKey)).data)).status;
 
-// Saturday: no stake at all
-stake('Saturday 10:00 New York', '2026-11-28T15:00:00Z', 6026);
-// Thanksgiving day: closed until 20:00
-stake('Thanksgiving 12:00 New York', '2026-11-26T17:00:00Z', 6026);
-// Friday 19:59 New York: stake is accepted, but the bell passes 20:00 before the climb starts
-stake('Friday 19:59 New York', '2026-11-21T00:59:00Z');
-begin('Friday 20:00:30 New York, frozen price still fresh', '2026-11-21T01:00:30Z', 6026);
+// gold keeps its sessions: closed on Saturday and on Thanksgiving afternoon
+stake('gold, Saturday 10:00 New York', '2026-11-28T15:00:00Z', 6026);
+stake('gold, Thanksgiving 15:00 New York', '2026-11-26T20:00:00Z', 6026);
+// Friday 27 Nov gold closes at 14:45: staked at 14:44, the bell passes before the climb starts
+stake('gold, Friday 14:44 New York', '2026-11-27T19:44:00Z');
+begin('gold, Friday 14:45:30 New York, frozen price still fresh', '2026-11-27T19:45:30Z', 6026);
 ok('the climb stays staked (refundable by finish_run)', runStatus() === 1, `status ${runStatus()}`);
 // Monday 10:00 New York: the same staked climb starts
-begin('Monday 10:00 New York', '2026-11-23T15:00:00Z');
+begin('gold, Monday 10:00 New York', '2026-11-30T15:00:00Z');
 ok('the climb is live', runStatus() === 2, `status ${runStatus()}`);
+
+// the xStocks trade around the clock: TSLAx and GMEx climbs on a Saturday
+for (const [name, asset] of [['TSLAx', TSLA], ['GMEx', GME]]) {
+  const p = Keypair.generate(); svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
+  const r2 = send([createAtaIdempotent(p.publicKey, p.publicKey), ix.faucet(p.publicKey), ix.initProfile(p.publicKey, 'sat_' + name.toLowerCase())], [p]);
+  ok(`${name} player set up`, r2.ok, r2.logs.slice(-2).join(' '));
+  stake(`${name}, Saturday 10:00 New York`, '2026-12-05T15:00:00Z', null, asset, p);
+  begin(`${name}, Saturday 10:00:05 New York`, '2026-12-05T15:00:05Z', null, asset, p);
+  ok(`${name}: the climb is live on a Saturday`, runStatus(p) === 2, `status ${runStatus(p)}`);
+}
+// a relay price that stopped (older than MAX_PRICE_AGE) is a closed market
+{
+  const p = Keypair.generate(); svm.airdrop(p.publicKey, BigInt(LAMPORTS_PER_SOL));
+  send([createAtaIdempotent(p.publicKey, p.publicKey), ix.faucet(p.publicKey), ix.initProfile(p.publicKey, 'stale_relay')], [p]);
+  at(utc('2026-12-06T15:00:00Z'));
+  const d = Buffer.from(svm.getAccount(MARKETS[TSLA].feedKey).data); d.writeBigInt64LE(BigInt(utc('2026-12-06T14:59:00Z')), 21);
+  svm.setAccount(MARKETS[TSLA].feedKey, { lamports: Number(rent(70)), data: d, owner: PROGRAM_ID, executable: false });
+  const st = send([ix.startRun(p.publicKey, p.publicKey, { asset: TSLA, side: 0, stake: 10_000_000n })], [p]);
+  ok('stake on Solana (no price read)', st.ok, st.logs.slice(-2).join(' '));
+  const res = send([ix.beginRun(p.publicKey, p.publicKey, TSLA, false)], [p]);
+  ok('a relay price a minute old: the climb cannot begin (StalePrice 6013)', !res.ok && res.code === 6013, `code ${res.code}`);
+}
 
 // retired round slots: only an idle one closes, only for the admin, and its rent goes back
 function roundSlot(slot, status, players = 0) {

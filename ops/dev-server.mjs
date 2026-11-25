@@ -9,11 +9,11 @@ import { KEY_DIR } from './lib/env.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3042);
-for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json'], ['SHARE_SECRET', 'share-secret.txt']]) {
+for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json'], ['RELAYER_SECRET_KEY', 'relayer.json'], ['SHARE_SECRET', 'share-secret.txt']]) {
   const f = path.join(KEY_DIR, file);
   if (!process.env[env] && fs.existsSync(f)) process.env[env] = fs.readFileSync(f, 'utf8').trim();
 }
-const routes = { '/api/faucet': (await import('../api/faucet.js')).default, '/api/share': (await import('../api/share.js')).default,
+const routes = { '/api/faucet': (await import('../api/faucet.js')).default, '/api/relay': (await import('../api/relay.js')).default, '/api/share': (await import('../api/share.js')).default,
   '/api/card': (await import('../api/card.js')).default, '/api/s': (await import('../api/s.js')).default };
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };

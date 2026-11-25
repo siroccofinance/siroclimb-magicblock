@@ -1,8 +1,10 @@
 // Siroclimb on chain: the front's contract (see js/api.js) served by the
 // siroclimb program on Solana devnet and a MagicBlock Ephemeral Rollup.
 //
-//   prices     MagicBlock's Pyth Lazer feed accounts read from the rollup every
-//              250 ms.
+//   prices     the price accounts read from the rollup every 250 ms: the
+//              program's xStock relays (TSLAx, NVDAx, AAPLx, GMEx, 24/7, kept
+//              fresh by /api/relay while the page is open) and MagicBlock's Pyth
+//              Lazer XAU/USD feed.
 //   wallet     Phantom / Solflare / Backpack, or a built-in devnet burner. One
 //              approval creates the profile, tops up test USDC, authorises a
 //              MagicBlock session key and lets it stake: every later action
@@ -74,6 +76,17 @@ async function seedHistory() {
   }));
 }
 seedHistory();
+
+// The xStocks' 24/7 prices reach the rollup through the program's relay accounts:
+// while this page is visible it asks /api/relay to push (at most about once a second).
+const RELAY_URL = (globalThis.SIROCLIMB_ENV && globalThis.SIROCLIMB_ENV.RELAY_URL) || 'api/relay';
+let relayOk = true, relayBusy = false;
+function pingRelay() {
+  if (!relayOk || relayBusy || (globalThis.document && document.hidden)) return;
+  relayBusy = true;
+  fetch(RELAY_URL, { method: 'POST' }).then((r) => { if (r.status === 404) relayOk = false; }).catch(() => {}).finally(() => { relayBusy = false; });
+}
+pingRelay(); setInterval(pingRelay, 1000);
 
 export const listAssets = () => MARKETS.map(({ id, name, ticker, kind, hours }) => ({ id, name, ticker, kind, hours }));
 export const marketOpen = (id) => isOpen(feeds[marketIndex(id)]);

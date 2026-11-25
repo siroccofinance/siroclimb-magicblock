@@ -10,9 +10,12 @@
 
 pub const KIND_EQUITY: u8 = 0;
 pub const KIND_METAL: u8 = 1;
+/// Around the clock: the xStocks trade 24/7 on chain, and their prices
+/// (the relay's) move all week.
+pub const KIND_ALWAYS: u8 = 2;
 
 /// Session kind per asset: TSLAx, NVDAx, AAPLx, XAU, GMEx.
-pub const KINDS: [u8; 5] = [KIND_EQUITY, KIND_EQUITY, KIND_EQUITY, KIND_METAL, KIND_EQUITY];
+pub const KINDS: [u8; 5] = [KIND_ALWAYS, KIND_ALWAYS, KIND_ALWAYS, KIND_METAL, KIND_ALWAYS];
 
 const M: u16 = 60;
 const DAY: u16 = 24 * M;
@@ -126,6 +129,7 @@ pub fn in_session(asset: u8, ts: i64) -> bool {
     match KINDS.get(asset as usize) {
         Some(&KIND_EQUITY) => open_in(&EQ_WEEK, EQ_HOLIDAYS, ts),
         Some(&KIND_METAL) => open_in(&MT_WEEK, MT_HOLIDAYS, ts),
+        Some(&KIND_ALWAYS) => true,
         _ => false,
     }
 }
@@ -156,30 +160,35 @@ mod tests {
         assert_eq!(ny_offset(utc(2026, 11, 1, 6, 0)), -5 * 3600);
     }
 
+    /// The US equity sessions (kept for a market that would follow them).
+    fn eq(ts: i64) -> bool {
+        open_in(&EQ_WEEK, EQ_HOLIDAYS, ts)
+    }
+
     #[test]
     fn equities_sunday_evening_to_friday_evening() {
         // Mon 23 Nov 2026, 10:00 New York = 15:00 UTC
-        assert!(in_session(0, utc(2026, 11, 23, 15, 0)));
+        assert!(eq(utc(2026, 11, 23, 15, 0)));
         // Fri 20 Nov 19:59 NY open, 20:00 closed
-        assert!(in_session(1, utc(2026, 11, 21, 0, 59)));
-        assert!(!in_session(1, utc(2026, 11, 21, 1, 0)));
+        assert!(eq(utc(2026, 11, 21, 0, 59)));
+        assert!(!eq(utc(2026, 11, 21, 1, 0)));
         // Saturday closed, Sunday 20:00 NY opens
-        assert!(!in_session(2, utc(2026, 11, 28, 15, 0)));
-        assert!(!in_session(2, utc(2026, 11, 30, 0, 59)));
-        assert!(in_session(2, utc(2026, 11, 30, 1, 0)));
+        assert!(!eq(utc(2026, 11, 28, 15, 0)));
+        assert!(!eq(utc(2026, 11, 30, 0, 59)));
+        assert!(eq(utc(2026, 11, 30, 1, 0)));
     }
 
     #[test]
     fn thanksgiving() {
         // Wed 25 Nov: open until 20:00 NY, then closed overnight
-        assert!(in_session(0, utc(2026, 11, 26, 0, 59)));
-        assert!(!in_session(0, utc(2026, 11, 26, 1, 0)));
+        assert!(eq(utc(2026, 11, 26, 0, 59)));
+        assert!(!eq(utc(2026, 11, 26, 1, 0)));
         // Thu 26 Nov: closed until 20:00 NY
-        assert!(!in_session(0, utc(2026, 11, 26, 17, 0)));
-        assert!(in_session(0, utc(2026, 11, 27, 1, 0)));
+        assert!(!eq(utc(2026, 11, 26, 17, 0)));
+        assert!(eq(utc(2026, 11, 27, 1, 0)));
         // Fri 27 Nov: until 17:00 NY
-        assert!(in_session(0, utc(2026, 11, 27, 21, 59)));
-        assert!(!in_session(0, utc(2026, 11, 27, 22, 0)));
+        assert!(eq(utc(2026, 11, 27, 21, 59)));
+        assert!(!eq(utc(2026, 11, 27, 22, 0)));
         // gold: 26 Nov closes 14:30 to 18:00, 27 Nov closes at 14:45
         assert!(!in_session(3, utc(2026, 11, 26, 20, 0)));
         assert!(in_session(3, utc(2026, 11, 26, 23, 0)));
@@ -196,14 +205,16 @@ mod tests {
     }
 
     #[test]
-    fn gmex_keeps_us_equity_hours() {
-        // Saturday: every market closed
-        assert!(!in_session(4, utc(2026, 11, 28, 12, 0)));
-        assert_eq!(session_mask(utc(2026, 11, 28, 12, 0)), 0);
-        // Tuesday 10:00 New York: the four equities and gold
+    fn xstocks_trade_around_the_clock() {
+        // Saturday: the four xStocks, gold closed
+        for a in [0, 1, 2, 4] {
+            assert!(in_session(a, utc(2026, 11, 28, 12, 0)));
+        }
+        assert_eq!(session_mask(utc(2026, 11, 28, 12, 0)), 0b10111);
+        // Tuesday 10:00 New York: everything
         assert_eq!(session_mask(utc(2026, 11, 24, 15, 0)), 0b11111);
-        // gold's daily break: the equities only
-        assert_eq!(session_mask(utc(2026, 11, 23, 22, 30)), 0b10111);
+        // Thanksgiving, US markets shut: the xStocks still trade
+        assert_eq!(session_mask(utc(2026, 11, 26, 17, 0)) & 0b10111, 0b10111);
         assert!(!in_session(9, 0));
     }
 
