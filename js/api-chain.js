@@ -2,9 +2,8 @@
 // siroclimb program on Solana devnet and a MagicBlock Ephemeral Rollup.
 //
 //   prices     the price accounts read from the rollup every 250 ms: the
-//              program's xStock relays (TSLAx, NVDAx, AAPLx, GMEx, 24/7, kept
-//              fresh by /api/relay while the page is open) and MagicBlock's Pyth
-//              Lazer XAU/USD feed.
+//              program's relays, one per market (the four xStocks and XAUt for
+//              gold, all 24/7), kept fresh by /api/relay and its cron.
 //   wallet     Phantom / Solflare / Backpack, or a built-in devnet burner. One
 //              approval creates the profile, tops up test USDC, authorises a
 //              MagicBlock session key and lets it stake: every later action

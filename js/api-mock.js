@@ -36,7 +36,7 @@ const ASSETS = [
   { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', p0: 385.17, vol: 0.0011 },
   { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', p0: 164.70, vol: 0.0010 },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', p0: 349.03, vol: 0.0007 },
-  { id: 'XAU', name: 'Gold', ticker: 'XAU', kind: 'metal', p0: 3633.4, vol: 0.0006 },
+  { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', p0: 3633.4, vol: 0.0006 },
   { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', p0: 27.46, vol: 0.0009 },
 ];
 

@@ -1,9 +1,7 @@
 # Demo script (pitch video, about 3 minutes)
 
 Before recording: `npm run dev` (or the hosted site), a fresh browser profile, an
-open market (the xStocks are open 24/7; gold Sun 18:00 to Fri 17:00 New York
-with a daily hour off at 17:00). The lobby shows a closed market as "Closed"
-with when it opens. Sound on.
+every market is open 24/7. Sound on.
 
 ## 1. Hook (0:00 to 0:20)
 
@@ -62,9 +60,9 @@ On the result screen, click the **Verify** links: stake + delegate (Solana), beg
 
 **Play again**, pick **GMEx**, **Short**, **50**. Ride it a little longer.
 
-> "Five markets, all priced on the rollup: the four xStocks from their own 24/7
-> market through the program's relay, gold from MagicBlock's Pyth feed, with its
-> trading sessions enforced by the program itself. Every
+> "Five markets, all priced on the rollup from their own 24/7 token market
+> through the program's relay: four xStocks and XAUt for gold. None of them
+> closes, nights and weekends included. Every
 > step of a climb is permissionless: if I close the tab, any browser finishes and
 > settles it."
 
