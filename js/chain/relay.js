@@ -21,7 +21,7 @@ import { relayPda } from './pdas.js';
 import { send } from './tx.js';
 
 const MAX_GAP = 0.015;
-const getJson = (u) => fetch(u, { signal: AbortSignal.timeout(2500) }).then((r) => r.json());
+const getJson = (u) => fetch(u, { signal: AbortSignal.timeout(1500) }).then((r) => r.json());
 
 async function kraken() {
   const pairs = RELAY_ASSETS.map((a) => MARKETS[a].relay);
@@ -74,6 +74,13 @@ export async function pushOnce(er, relayer, { minGapS = 1 } = {}) {
   const oldest = Math.min(...RELAY_ASSETS.map((a) => (cur[a] ? cur[a].ts : 0)));
   if (now - oldest < minGapS) return { skipped: true };
   const q = await fetchQuotes();
+  // Jupiter's price hops between routes (a few tenths of a percent): ease it from
+  // the price on chain, a third of the way per push, at most 0.15 % a second
+  for (const a of RELAY_ASSETS) {
+    if (!q[a] || q[a].src !== 'jupiter' || !cur[a] || !cur[a].raw || now - cur[a].ts > 30) continue;
+    const step = Math.max(-0.0015, Math.min(0.0015, (q[a].raw / cur[a].raw - 1) / 3));
+    q[a].raw = Math.round(cur[a].raw * (1 + step)); q[a].price = q[a].raw * 10 ** MARKETS[a].exponent;
+  }
   const ixs = RELAY_ASSETS.filter((a) => q[a]).map((a) => ix.pushPrice(relayer.publicKey, a, BigInt(q[a].raw), BigInt(Math.max(q[a].ts, cur[a] ? cur[a].ts : 0))));
   if (!ixs.length) return { skipped: true, reason: 'no quotes' };
   const sig = await send(er, ixs, [relayer], { label: 'push prices', attempts: 1, tries: 20 });
