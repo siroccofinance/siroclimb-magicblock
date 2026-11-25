@@ -34,9 +34,11 @@ pub mod game;
 pub mod hours;
 pub mod reserve;
 pub mod token;
+pub mod desk;
 use game::*;
 use reserve::*;
 use token::*;
+use desk::*;
 
 declare_id!("BS6874Pq8Biq7vuh1pxpuK2iPvkByJDkxyi6HWneTFfZ");
 
@@ -183,6 +185,7 @@ pub mod siroclimb {
         authorize(&ctx.accounts.signer.key(), &owner, &ctx.accounts.session_token, now)?;
         require!(amount >= ONE_USDC, ClimbError::BadStake);
         let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let vault = reserve_cash(vault, &ctx.accounts.desk);
         let rs = &mut ctx.accounts.reserve;
         let n = shares_for(amount, assets_of(vault, rs.staked), rs.shares);
         require!(n > 0, ClimbError::BadShares);
@@ -208,9 +211,10 @@ pub mod siroclimb {
         require!(shares > 0 && shares <= ctx.accounts.lender.shares, ClimbError::BadShares);
         let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
         let rs = &mut ctx.accounts.reserve;
-        let assets = assets_of(vault, rs.staked);
+        let assets = assets_of(reserve_cash(vault, &ctx.accounts.desk), rs.staked);
         let amount = value_of(shares, assets, rs.shares);
-        require!(amount <= assets.saturating_sub(rs.reserved), ClimbError::NotEnoughLiquidity);
+        // what is in the vault right now (the open positions' tUSDC is with the desk until they close)
+        require!(amount <= assets.saturating_sub(rs.reserved) && amount <= vault.saturating_sub(rs.staked), ClimbError::NotEnoughLiquidity);
         let seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
         token_transfer(&ctx.accounts.token_program, &ctx.accounts.vault, &ctx.accounts.owner_usdc, &ctx.accounts.config.to_account_info(), amount, Some(seeds))?;
         rs.shares -= shares;
@@ -307,7 +311,7 @@ pub mod siroclimb {
         };
         // The Sirocco Reserve backs the climb: its free liquidity must cover the
         // most the climb could owe beyond the stake (more than its largest borrow).
-        let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let vault = reserve_cash(token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?, &ctx.accounts.desk);
         let exposure = exposure_of(stake);
         let line = line_of(stake, top, mode == MODE_PACK);
         {
@@ -349,6 +353,78 @@ pub mod siroclimb {
         run.cost = 0;
         run.reserved = exposure;
         run.line = line;
+        run.units_open = 0;
+        run.units = 0;
+        run.notional_open = 0;
+        run.notional = 0;
+        run.fill_price = 0;
+        run.exit_fill = 0;
+        run.booked_step = 0;
+        run.spread_bps = 0;
+        run.decimals = 0;
+        run.real_pnl = 0;
+        run.boost_pnl = 0;
+        Ok(())
+    }
+
+    /// Open the climb's real position, in the same transaction as `start_run`: the stake's worth of the
+    /// market's token at the relay's price on Solana, plus or minus the desk's spread. A long buys it from
+    /// the desk into the climb's escrow (the reserve pays from the vault); a short borrows it from the
+    /// lending book and sells it to the desk (the reserve keeps the tUSDC as collateral).
+    pub fn open_position(ctx: Context<OpenPosition>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let run = &mut ctx.accounts.run;
+        let signer = ctx.accounts.signer.key();
+        require!(run.status == RUN_STAKED && run.units_open == 0, ClimbError::BadStatus);
+        require!(signer == run.session || signer == run.player, ClimbError::Unauthorized);
+        let a = run.asset as usize;
+        let desk = &mut ctx.accounts.desk;
+        let mint = ctx.accounts.mint.key();
+        require_keys_eq!(mint, desk.mints[a], ClimbError::BadMint);
+        let desk_key = desk.key();
+        require_keys_eq!(ctx.accounts.desk_token.key(), ata_of(&desk_key, &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+        require_keys_eq!(ctx.accounts.desk_usdc.key(), ata_of(&desk_key, &ctx.accounts.config.usdc_mint, &TOKEN_PROGRAM_ID), ClimbError::BadTokenAccount);
+        require_keys_eq!(ctx.accounts.escrow.key(), ata_of(&run.key(), &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+        require_keys_eq!(ctx.accounts.lend_token.key(), ata_of(&ctx.accounts.lend.key(), &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+        let q = &ctx.accounts.quotes;
+        let price = q.prices[a];
+        require!(price > 0, ClimbError::BadPrice);
+        require!(now - q.ts <= QUOTE_MAX_AGE, ClimbError::StalePrice);
+
+        ata_create_idempotent(&ctx.accounts.ata_program, &ctx.accounts.signer.to_account_info(), &ctx.accounts.escrow, &run.to_account_info(), &ctx.accounts.mint, &ctx.accounts.system_program.to_account_info(), &ctx.accounts.token_2022_program)?;
+        let dec = desk.decimals[a];
+        let long = run.side != SIDE_SHORT;
+        let px = if long { ask(price, desk.spread_bps) } else { bid(price, desk.spread_bps) };
+        let usdc = run.stake;
+        let units = units_for(usdc, px, EXPONENTS[a], dec);
+        require!(units > 0, ClimbError::BadPrice);
+        let player = run.player;
+        let config_seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
+        let desk_seeds: &[&[u8]] = &[DESK_SEED, &[desk.bump]];
+        let lend_seeds: &[&[u8]] = &[LEND_SEED, &[ctx.bumps.lend]];
+        let run_seeds: &[&[u8]] = &[RUN_SEED, player.as_ref(), &[run.bump]];
+        let t22 = &ctx.accounts.token_2022_program;
+        if long {
+            token_transfer(&ctx.accounts.token_program, &ctx.accounts.vault, &ctx.accounts.desk_usdc, &ctx.accounts.config.to_account_info(), usdc, Some(config_seeds))?;
+            token22_transfer(t22, &ctx.accounts.desk_token, &ctx.accounts.mint, &ctx.accounts.escrow, &desk.to_account_info(), units, dec, desk_seeds)?;
+            desk.open_long_cost += usdc;
+        } else {
+            token22_transfer(t22, &ctx.accounts.lend_token, &ctx.accounts.mint, &ctx.accounts.escrow, &ctx.accounts.lend.to_account_info(), units, dec, lend_seeds)?;
+            token22_transfer(t22, &ctx.accounts.escrow, &ctx.accounts.mint, &ctx.accounts.desk_token, &run.to_account_info(), units, dec, run_seeds)?;
+            token_transfer(&ctx.accounts.token_program, &ctx.accounts.desk_usdc, &ctx.accounts.vault, &desk.to_account_info(), usdc, Some(desk_seeds))?;
+            desk.open_short_proceeds += usdc;
+        }
+        desk.trades += 1;
+        desk.volume += usdc;
+        run.units_open = units;
+        run.units = units;
+        run.notional_open = usdc;
+        run.notional = usdc;
+        run.fill_price = px;
+        run.booked_step = 0;
+        run.spread_bps = desk.spread_bps;
+        run.decimals = dec;
+        msg!("open {} {} units at {} for {} tUSDC", if long { "long" } else { "short" }, units, px, usdc);
         Ok(())
     }
 
@@ -371,7 +447,7 @@ pub mod siroclimb {
 
     /// The climb is back on Solana and over: pay what it is worth from the
     /// house vault and write it into the profile. Permissionless.
-    pub fn settle_run(ctx: Context<SettleRun>) -> Result<()> {
+    pub fn settle_run(mut ctx: Context<SettleRun>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let run = &mut ctx.accounts.run;
         require!(run.is_over(), ClimbError::BadStatus);
@@ -382,12 +458,20 @@ pub mod siroclimb {
         } else {
             0
         };
+        let has_position = run.units > 0;
+        if has_position {
+            let lend_bump = ctx.bumps.lend;
+            close_position(&mut ctx.accounts, lend_bump)?;
+        }
+        let run = &mut ctx.accounts.run;
         let payout = run.payout_for();
         if payout > 0 {
             let seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
             token_transfer(&ctx.accounts.token_program, &ctx.accounts.vault, &ctx.accounts.player_usdc, &ctx.accounts.config.to_account_info(), payout, Some(seeds))?;
         }
         let cost = if run.mode == MODE_PACK { 0 } else { run.stake };
+        // the climb's result beyond what the tokens made: the game's boost, between the player and the reserve
+        run.boost_pnl = run.value as i64 - run.stake as i64 - run.real_pnl;
         ctx.accounts.profile.record(RunRecord {
             ts: now,
             stake: run.stake,
@@ -495,6 +579,55 @@ pub mod siroclimb {
         Ok(())
     }
 
+    /// Open the Sirocco desk (spread, the market tokens) and the Solana quotes its opening fills read.
+    pub fn init_desk(ctx: Context<InitDesk>, spread_bps: u16, mints: [Pubkey; ASSETS], decimals: [u8; ASSETS], relayer: Pubkey) -> Result<()> {
+        require!(spread_bps < 1_000, ClimbError::BadPrice);
+        let d = &mut ctx.accounts.desk;
+        d.admin = ctx.accounts.admin.key();
+        d.spread_bps = spread_bps;
+        d.mints = mints;
+        d.decimals = decimals;
+        d.bump = ctx.bumps.desk;
+        let q = &mut ctx.accounts.quotes;
+        q.relayer = relayer;
+        q.bump = ctx.bumps.quotes;
+        Ok(())
+    }
+
+    /// Change the desk's spread or a market's token (admin).
+    pub fn set_desk(ctx: Context<SetDesk>, spread_bps: u16, mints: [Pubkey; ASSETS], decimals: [u8; ASSETS]) -> Result<()> {
+        require!(spread_bps < 1_000, ClimbError::BadPrice);
+        let d = &mut ctx.accounts.desk;
+        d.spread_bps = spread_bps;
+        d.mints = mints;
+        d.decimals = decimals;
+        Ok(())
+    }
+
+    /// The relay pushes its prices on Solana too, for the opening fills (same raw units as the rollup).
+    pub fn push_quotes(ctx: Context<PushQuotes>, prices: [u64; ASSETS], ts: i64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let q = &mut ctx.accounts.quotes;
+        require_keys_eq!(ctx.accounts.relayer.key(), q.relayer, ClimbError::Unauthorized);
+        require!(ts >= q.ts && ts <= now + 5, ClimbError::BadPrice);
+        for (i, p) in prices.iter().enumerate() {
+            if *p > 0 {
+                q.prices[i] = *p;
+            }
+        }
+        q.ts = ts;
+        q.updates += 1;
+        Ok(())
+    }
+
+    /// Mint test USDC into the desk's tUSDC account (admin): its float for buying back and paying out.
+    pub fn fund_desk(ctx: Context<FundDesk>, amount: u64) -> Result<()> {
+        let desk_key = ctx.accounts.desk.key();
+        require_keys_eq!(ctx.accounts.desk_usdc.key(), ata_of(&desk_key, &ctx.accounts.config.usdc_mint, &TOKEN_PROGRAM_ID), ClimbError::BadTokenAccount);
+        let seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
+        token_mint_to(&ctx.accounts.token_program, &ctx.accounts.usdc_mint, &ctx.accounts.desk_usdc, &ctx.accounts.config.to_account_info(), amount, seeds)
+    }
+
     // ========================================================= ephemeral rollup
 
     /// Push an xStock price into its relay account (rollup, no fee). Only the
@@ -522,6 +655,7 @@ pub mod siroclimb {
         let run_info = ctx.accounts.run.to_account_info();
         let run = &mut ctx.accounts.run;
         require!(run.status == RUN_STAKED, ClimbError::BadStatus);
+        require!(run.units_open > 0, ClimbError::NoPosition);
         let signer = ctx.accounts.payer.key();
         require!(signer == run.session || signer == run.player || now > run.created_ts + BEGIN_GRACE, ClimbError::Unauthorized);
         let (price, ts) = read_feed(&ctx.accounts.feed, run.asset)?;
@@ -629,6 +763,77 @@ fn authorize(signer: &Pubkey, player: &Pubkey, token: &Option<Account<SessionTok
 
 /// Move `amount` from the player's token account into the vault. The signer
 /// is the owner, or the session key the wallet approved as its spender.
+/// The reserve's cash for its share price: the vault, plus the tUSDC it paid the desk for the tokens
+/// long climbs hold, less the tUSDC it holds for the tokens short climbs sold (both come back at settlement).
+fn reserve_cash(vault: u64, desk: &Desk) -> u64 {
+    (vault + desk.open_long_cost).saturating_sub(desk.open_short_proceeds)
+}
+
+/// Settle the climb's real position on Solana: move the leverage steps booked on the rollup (a long buys
+/// those tokens from the desk with the borrowed tUSDC; a short borrows them and sells them to the desk),
+/// then close it at the exit price (a long sells everything back to the desk; a short buys it back and
+/// returns it to the lending book). Records the real P&L.
+fn close_position(acc: &mut SettleRun, lend_bump: u8) -> Result<()> {
+    let run = &mut acc.run;
+    let a = run.asset as usize;
+    let desk = &mut acc.desk;
+    let mint = acc.mint.key();
+    require_keys_eq!(mint, desk.mints[a], ClimbError::BadMint);
+    let desk_key = desk.key();
+    require_keys_eq!(acc.desk_token.key(), ata_of(&desk_key, &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+    require_keys_eq!(acc.desk_usdc.key(), ata_of(&desk_key, &acc.config.usdc_mint, &TOKEN_PROGRAM_ID), ClimbError::BadTokenAccount);
+    require_keys_eq!(acc.escrow.key(), ata_of(&run.key(), &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+    require_keys_eq!(acc.lend_token.key(), ata_of(&acc.lend.key(), &mint, &TOKEN_2022_PROGRAM_ID), ClimbError::BadTokenAccount);
+    let dec = run.decimals;
+    let long = run.side != SIDE_SHORT;
+    let step_units = run.units - run.units_open;
+    let step_usdc = run.notional - run.notional_open;
+    // a climb that never began closes where it opened
+    let exit = if run.last_price > 0 {
+        if long { bid(run.last_price, run.spread_bps) } else { ask(run.last_price, run.spread_bps) }
+    } else {
+        run.fill_price
+    };
+    let exit_usdc = usdc_for(run.units, exit, EXPONENTS[a], dec);
+    let player = run.player;
+    let config_seeds: &[&[u8]] = &[CONFIG_SEED, &[acc.config.bump]];
+    let desk_seeds: &[&[u8]] = &[DESK_SEED, &[desk.bump]];
+    let lend_seeds: &[&[u8]] = &[LEND_SEED, &[lend_bump]];
+    let run_seeds: &[&[u8]] = &[RUN_SEED, player.as_ref(), &[run.bump]];
+    let t22 = &acc.token_2022_program.to_account_info();
+    let tp = &acc.token_program.to_account_info();
+    let (vault, desk_usdc, desk_token, escrow, lend_token, mint_ai) = (
+        &acc.vault.to_account_info(), &acc.desk_usdc.to_account_info(), &acc.desk_token.to_account_info(),
+        &acc.escrow.to_account_info(), &acc.lend_token.to_account_info(), &acc.mint.to_account_info(),
+    );
+    let (config_ai, desk_ai, lend_ai, run_ai) = (acc.config.to_account_info(), desk.to_account_info(), acc.lend.to_account_info(), run.to_account_info());
+    if long {
+        if step_units > 0 {
+            token_transfer(tp, vault, desk_usdc, &config_ai, step_usdc, Some(config_seeds))?;
+            token22_transfer(t22, desk_token, mint_ai, escrow, &desk_ai, step_units, dec, desk_seeds)?;
+        }
+        token22_transfer(t22, escrow, mint_ai, desk_token, &run_ai, run.units, dec, run_seeds)?;
+        token_transfer(tp, desk_usdc, vault, &desk_ai, exit_usdc, Some(desk_seeds))?;
+        desk.open_long_cost = desk.open_long_cost.saturating_sub(run.notional_open);
+    } else {
+        if step_units > 0 {
+            token22_transfer(t22, lend_token, mint_ai, escrow, &lend_ai, step_units, dec, lend_seeds)?;
+            token22_transfer(t22, escrow, mint_ai, desk_token, &run_ai, step_units, dec, run_seeds)?;
+            token_transfer(tp, desk_usdc, vault, &desk_ai, step_usdc, Some(desk_seeds))?;
+        }
+        token_transfer(tp, vault, desk_usdc, &config_ai, exit_usdc, Some(config_seeds))?;
+        token22_transfer(t22, desk_token, mint_ai, escrow, &desk_ai, run.units, dec, desk_seeds)?;
+        token22_transfer(t22, escrow, mint_ai, lend_token, &run_ai, run.units, dec, run_seeds)?;
+        desk.open_short_proceeds = desk.open_short_proceeds.saturating_sub(run.notional_open);
+    }
+    desk.trades += 1;
+    desk.volume += step_usdc + exit_usdc;
+    run.exit_fill = exit;
+    run.real_pnl = real_pnl(long, run.notional, exit_usdc);
+    msg!("close {} units at {}: real P&L {}", run.units, exit, run.real_pnl);
+    Ok(())
+}
+
 fn stake_in<'info>(
     token_program: &UncheckedAccount<'info>,
     from: &UncheckedAccount<'info>,
@@ -843,6 +1048,8 @@ pub struct Deposit<'info> {
     pub config: Box<Account<'info, Config>>,
     #[account(mut, seeds = [RESERVE_SEED], bump = reserve.bump)]
     pub reserve: Box<Account<'info, Reserve>>,
+    #[account(seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
     #[account(init_if_needed, payer = signer, space = 8 + Lender::INIT_SPACE, seeds = [LENDER_SEED, owner.key().as_ref()], bump)]
     pub lender: Box<Account<'info, Lender>>,
     /// CHECK: the lender's test-USDC account, checked in `stake_in`.
@@ -867,6 +1074,8 @@ pub struct Withdraw<'info> {
     pub config: Box<Account<'info, Config>>,
     #[account(mut, seeds = [RESERVE_SEED], bump = reserve.bump)]
     pub reserve: Box<Account<'info, Reserve>>,
+    #[account(seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
     #[account(mut, seeds = [LENDER_SEED, owner.key().as_ref()], bump = lender.bump)]
     pub lender: Box<Account<'info, Lender>>,
     /// CHECK: the lender's test-USDC account, owner checked in the handler.
@@ -944,6 +1153,8 @@ pub struct StartRun<'info> {
     pub run: Box<Account<'info, Run>>,
     #[account(mut, seeds = [RESERVE_SEED], bump = reserve.bump)]
     pub reserve: Box<Account<'info, Reserve>>,
+    #[account(seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
     /// CHECK: player's test-USDC account, checked in `stake_in`.
     #[account(mut)]
     pub player_usdc: UncheckedAccount<'info>,
@@ -987,6 +1198,122 @@ pub struct SettleRun<'info> {
     /// CHECK: the config's vault.
     #[account(mut, address = config.vault @ ClimbError::BadVault)]
     pub vault: UncheckedAccount<'info>,
+    /// CHECK: address-checked SPL Token program.
+    #[account(address = TOKEN_PROGRAM_ID)]
+    pub token_program: UncheckedAccount<'info>,
+    #[account(mut, seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
+    /// CHECK: the market's token mint, checked against the desk when the climb holds a position.
+    pub mint: UncheckedAccount<'info>,
+    /// CHECK: the desk's token account (checked in `close_position`).
+    #[account(mut)]
+    pub desk_token: UncheckedAccount<'info>,
+    /// CHECK: the desk's tUSDC account (checked in `close_position`).
+    #[account(mut)]
+    pub desk_usdc: UncheckedAccount<'info>,
+    /// CHECK: the climb's escrow (checked in `close_position`).
+    #[account(mut)]
+    pub escrow: UncheckedAccount<'info>,
+    /// CHECK: the stock-lending book (a PDA, authority of its token accounts).
+    #[account(seeds = [LEND_SEED], bump)]
+    pub lend: UncheckedAccount<'info>,
+    /// CHECK: the lending book's token account (checked in `close_position`).
+    #[account(mut)]
+    pub lend_token: UncheckedAccount<'info>,
+    /// CHECK: address-checked Token-2022 program.
+    #[account(address = TOKEN_2022_PROGRAM_ID)]
+    pub token_2022_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct OpenPosition<'info> {
+    /// The climb's session key (or the wallet): pays the escrow's rent the first time.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    /// CHECK: the climb's player.
+    pub player: UncheckedAccount<'info>,
+    #[account(mut, seeds = [RUN_SEED, player.key().as_ref()], bump = run.bump)]
+    pub run: Box<Account<'info, Run>>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(seeds = [QUOTES_SEED], bump = quotes.bump)]
+    pub quotes: Box<Account<'info, Quotes>>,
+    #[account(mut, seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
+    /// CHECK: the market's token mint, checked against the desk.
+    pub mint: UncheckedAccount<'info>,
+    /// CHECK: the desk's token account (checked in the handler).
+    #[account(mut)]
+    pub desk_token: UncheckedAccount<'info>,
+    /// CHECK: the desk's tUSDC account (checked in the handler).
+    #[account(mut)]
+    pub desk_usdc: UncheckedAccount<'info>,
+    /// CHECK: the config's vault.
+    #[account(mut, address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: the climb's escrow, the run PDA's associated token account (created in the handler).
+    #[account(mut)]
+    pub escrow: UncheckedAccount<'info>,
+    /// CHECK: the stock-lending book (a PDA, authority of its token accounts).
+    #[account(seeds = [LEND_SEED], bump)]
+    pub lend: UncheckedAccount<'info>,
+    /// CHECK: the lending book's token account (checked in the handler).
+    #[account(mut)]
+    pub lend_token: UncheckedAccount<'info>,
+    /// CHECK: address-checked SPL Token program.
+    #[account(address = TOKEN_PROGRAM_ID)]
+    pub token_program: UncheckedAccount<'info>,
+    /// CHECK: address-checked Token-2022 program.
+    #[account(address = TOKEN_2022_PROGRAM_ID)]
+    pub token_2022_program: UncheckedAccount<'info>,
+    /// CHECK: address-checked associated token program.
+    #[account(address = ATA_PROGRAM_ID)]
+    pub ata_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitDesk<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(init, payer = admin, space = 8 + Desk::INIT_SPACE, seeds = [DESK_SEED], bump)]
+    pub desk: Box<Account<'info, Desk>>,
+    #[account(init, payer = admin, space = 8 + Quotes::INIT_SPACE, seeds = [QUOTES_SEED], bump)]
+    pub quotes: Box<Account<'info, Quotes>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetDesk<'info> {
+    #[account(address = desk.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
+}
+
+#[derive(Accounts)]
+pub struct PushQuotes<'info> {
+    pub relayer: Signer<'info>,
+    #[account(mut, seeds = [QUOTES_SEED], bump = quotes.bump)]
+    pub quotes: Box<Account<'info, Quotes>>,
+}
+
+#[derive(Accounts)]
+pub struct FundDesk<'info> {
+    #[account(address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
+    /// CHECK: the config's mint.
+    #[account(mut, address = config.usdc_mint @ ClimbError::BadMint)]
+    pub usdc_mint: UncheckedAccount<'info>,
+    /// CHECK: the desk's tUSDC account (its associated token account, checked in the handler).
+    #[account(mut)]
+    pub desk_usdc: UncheckedAccount<'info>,
     /// CHECK: address-checked SPL Token program.
     #[account(address = TOKEN_PROGRAM_ID)]
     pub token_program: UncheckedAccount<'info>,
