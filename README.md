@@ -40,6 +40,22 @@ A climb is a minute of a position that changes every half second: the price move
 
 Timed rounds (everyone on the same market, a pot split 50 / 30 / 20) were removed on 24 Nov 2026 to keep the game solo; their four slot accounts were closed with `close_round_slot` and their rent returned (see [DEPLOYMENTS.md](DEPLOYMENTS.md)).
 
+## Real positions: the Sirocco desk
+
+Every climb holds real market tokens: the xStock mirrors (TSLAx, NVDAx, AAPLx, GMEx) and an XAUt mirror for gold, Token-2022 mints with the real tokens' names, symbols and decimals. Devnet has no liquidity for them, so the program runs its own venue, the **Sirocco desk**: a program-owned account that quotes each token at the relay's live price plus or minus 0.05 % and holds inventories of the tokens and of tUSDC. A **stock-lending book**, also program-owned, lends the tokens that shorts sell.
+
+| | Long | Short |
+|---|---|---|
+| Start (Solana, `open_position`, same transaction as the stake) | the stake buys the token from the desk into the climb's **escrow** (a token account owned by the run PDA); the reserve pays | the climb borrows the stake's worth of the token from the lending book and sells it to the desk; the reserve keeps the tUSDC as collateral |
+| Each leverage step (rollup, `tick_run`) | stake x 0.5 more, borrowed from the reserve, buys more of the token at that tick's price (booked in the run) | stake x 0.5 more borrowed and sold at that tick's price (booked) |
+| Settlement (Solana, `settle_run`) | the booked tokens are delivered, then everything is sold back to the desk at the exit price; the loan and its cost are repaid | the booked tokens are borrowed and sold, then everything is bought back from the desk at the exit price and returned to the lending book |
+
+The opening fill happens on Solana at the relay's prices pushed there every ~10 s (`Quotes`, at most 30 s old), so the opening tokens sit in the escrow for the whole climb (the result screen links it). The step fills are made on the rollup at the tick's price and move on Solana at settlement, with the close.
+
+**The game keeps its boost, shown as "moves ×90".** The position's real P&L is what the tokens made (spread included); the rest of the climb's result is the game's amplification, settled between the player and the reserve as before. The result screen splits the two ("Position P&L" and "Game boost ×90"), and the run account records both (`real_pnl`, `boost_pnl`). The cap (5 x stake) and the floor (the stake is the most a player can lose) are unchanged. Money-wise the desk is the counterparty of the real P&L and the reserve of the boost: the reserve's cash counts the tUSDC it has in open positions (`open_long_cost - open_short_proceeds` on the desk), so its share price does not jump while climbs are open.
+
+The Reserve panel shows the desk: inventory and lendable amount of each token, the tUSDC float, the tUSDC in open positions, trades and volume. Accounts: [DEPLOYMENTS.md](DEPLOYMENTS.md).
+
 ## The Sirocco Reserve: real leverage, lent by lenders
 
 Leverage in Siroclimb is a loan from a pool, not a bet against a house.
@@ -159,8 +175,9 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 |---|---|---|
 | Game rules and sessions (Rust unit) | `npm run chain:test` | 17 / 17 (ladder, payout cap, borrow cost, share math), including 3,000 instants matched against the front's schedule reader |
 | Market hours (all five open 24/7, a climb on each on a Saturday, a stale relay refused) and retired round slots on the built program (LiteSVM) | `npm run test:hours` | 31 / 31 |
+| Real positions on the built program (LiteSVM) | `npm run test:positions` | 127 / 127: every market long and short, token balances at the open (escrow, desk, lending book), two steps booked, the bell, the close (escrow empty, inventories back, the desk pays exactly the real P&L, real + boost = the result, vault = stake - payout + real P&L), a bust, refusals (no position, a stranger, the wrong token, a quote 40 s old, a quote not from the relay, a second open, desk funding) |
 | Sirocco Reserve on the built program (LiteSVM) | `npm run test:reserve` | 24 / 24: the bankroll becomes the admin's shares, deposit and withdraw at the share price, 4 x stake reserved and a 3 x stake line per climb, `ReserveFull`, `NotEnoughLiquidity`, `BadShares`, settlement charges exactly the front's borrow cost, lenders' positions move with the climb, `grow_run` on an old run account |
-| On-chain battery | `npm run battery -- 24 2` | with the Sirocco Reserve (`-- 8 1`): **156 / 156**: 3 lenders deposit and withdraw at the share price, 8 simultaneous climbs on all five markets each checked for its reservation, borrow line and borrow cost, refusals, VRF packs, the reserve square at the end; solo only before it: 118 / 118; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
+| On-chain battery | `npm run battery -- 24 2` | with real positions (`-- 10 2`, 25 Nov): **307 / 307**, every climb checked for its opening fill, escrow, close and real P&L + boost = result; with the Sirocco Reserve (`-- 8 1`): **156 / 156**: 3 lenders deposit and withdraw at the share price, 8 simultaneous climbs on all five markets each checked for its reservation, borrow line and borrow cost, refusals, VRF packs, the reserve square at the end; solo only before it: 118 / 118; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, Share opens X with a signed `/s/` link (summary_large_image, card PNG 200), 0 console errors |
 | Browser, a GMEx climb | `MARKET=GMEx npm run test:ui` | GMEx card open in the lobby, climb at the GME price, cash out, 4 proof links, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |

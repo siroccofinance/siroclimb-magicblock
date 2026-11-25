@@ -23,7 +23,7 @@ Before submitting:
 
 ## Description (short)
 
-Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPLx, GMEx) and tokenized gold (XAUt). Go long or short: the coin rolls up and down a staircase that follows the live price, leverage steps from 1x to 4x every 6 seconds, and you cash out whenever you like. Your stake is the most you can lose. Leverage is a real loan from the Sirocco Reserve, a tUSDC lending pool anyone can lend to and earn from. Every climb runs fully on chain on a MagicBlock Ephemeral Rollup: 120 ticks a minute, zero fees, one wallet approval, settled on Solana. Every market trades 24/7, and so does the game.
+Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPLx, GMEx) and tokenized gold (XAUt). Go long or short: the coin rolls up and down a staircase that follows the live price, leverage steps from 1x to 4x every 6 seconds, and you cash out whenever you like. Your stake is the most you can lose. Every climb is a real position: long, it buys the market's token (real tokens sit in the climb's escrow); short, it borrows and sells it, through the program's own swap venue (the Sirocco desk). Leverage is a real loan from the Sirocco Reserve, a tUSDC lending pool anyone can lend to and earn from. The game magnifies the moves ("moves ×90"), and the result splits the tokens' P&L from the game's boost. Every climb runs fully on chain on a MagicBlock Ephemeral Rollup: 120 ticks a minute, zero fees, one wallet approval, settled on Solana. Every market trades 24/7, and so does the game.
 
 ## How MagicBlock is used
 
@@ -31,6 +31,7 @@ Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPL
 - **Cranks (`ScheduleTask`).** `begin_run` schedules `tick_run` every 500 ms on the rollup, about 120 ticks per climb, with no off-chain loop. Ticks are permissionless and idempotent.
 - **Real-time prices on the rollup, 24/7.** Every market reads a program-owned relay account on the rollup, pushed gasless every second from the token's own 24/7 market: the xStocks, and XAUt (Tether Gold) for gold. Pyth's US equity feeds stand still outside US hours and Pyth's spot gold closes on weekends, so no market closes this way. The program checks addresses, owners and staleness.
 - **VRF.** Free leverage packs: MagicBlock's VRF draws the tier (1.5x to 4x), and the callback is only accepted from the VRF program's identity.
+- **Real positions across both layers.** The opening fill moves real tokens on Solana in the same transaction as the stake and the delegation. Each leverage step is filled on the rollup at that tick's price, and the booked tokens move on Solana at settlement, together with the close.
 - **Session keys.** One wallet approval creates a `SessionTokenV2` and a tUSDC spending allowance. After that, every stake, cash out and pack is signed by the session key, with no prompt.
 - **Measured** (devnet-eu battery medians): delegation visible on the rollup in 17 ms, begin in 0.31 s, cash out with commit and undelegate in 0.30 s, back on Solana in 0.9 s.
 
@@ -50,7 +51,7 @@ Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPL
 > "One approval: a profile, test USDC, and a MagicBlock session key. From here on, no more wallet prompts."
 
 **0:35 to 1:20, a climb.** Pick **TSLAx**, **Long**, **25**, then **Start climbing**. Point at the leverage gauge (1x, 1.5x, 2x), the price chart, and the "Borrowed from the Sirocco Reserve" line.
-> "My run account was just delegated to the rollup. A crank ticks the climb every half second: price, leverage, value, the bust. That's 120 on-chain ticks a minute, at zero fees. Tesla's xStock trades 24/7, so its live price is relayed into the rollup, even at night."
+> "The stake just bought real TSLAx tokens into this climb's escrow, and my run account was delegated to the rollup. A crank ticks the climb every half second: price, leverage, value, the bust. That's 120 on-chain ticks a minute, at zero fees. Tesla's xStock trades 24/7, so its live price is relayed into the rollup, even at night."
 > "Past 1x the position is borrowed from the Sirocco Reserve, a lending pool anyone can lend to."
 
 **1:20 to 1:40, cash out.** Click **Cash out**. The coin is tossed and the result shows.
@@ -71,7 +72,7 @@ Click a **Verify** link.
 
 > Siroclimb 🪙 a one-minute leverage climb on tokenized stocks.
 >
-> Long or short TSLAx, NVDAx, AAPLx, GMEx or gold, 24/7, 1x to 4x, cash out anytime. Leverage is borrowed from a lending pool.
+> Long or short TSLAx, NVDAx, AAPLx, GMEx or gold, 24/7, 1x to 4x, cash out anytime. Real tokens bought or borrowed, with leverage from a lending pool.
 >
 > Fully on-chain on a @magicblock Ephemeral Rollup: 120 ticks a minute, zero fees, settled on Solana. Built for Solana Blitz v10.
 >

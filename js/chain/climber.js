@@ -84,6 +84,8 @@ export class Climber {
     const base = await send(this.base, [
       ...grow,
       ix.startRun(a.publicKey, this.me, { asset, side: sideN, stake: BigInt(Math.round(stake * ONE_USDC)), usePack }, this.token),
+      // the real position: the stake's worth of the market token, into the climb's escrow (long) or borrowed and sold (short)
+      ix.openPosition(a.publicKey, this.me, asset),
       ix.delegateRun(a.publicKey, this.me, ER_VALIDATOR),
     ], [a], { label: 'start run' });
     const tBase = Date.now();
@@ -149,8 +151,11 @@ export class Climber {
   async finishRun(player, asset) { return send(this.er, [ix.finishRun(this.actor.publicKey, player, asset)], [this.actor], { label: 'finish run' }); }
   /// Permissionless: pay out a climb that is back on Solana.
   async settleRun(player = this.me) {
-    await this.waitOnBase(runPda(player));
-    return send(this.base, [ix.settleRun(this.actor.publicKey, player)], [this.actor], { label: 'settle run' });
+    const a = await this.waitOnBase(runPda(player));
+    const asset = decodeRun(a.data).asset;
+    // a climb started before an upgrade that grew the run account: grow it in the same transaction
+    const grow = a.data.length < RUN_SIZE ? [ix.growRun(this.actor.publicKey, player)] : [];
+    return send(this.base, [...grow, ix.settleRun(this.actor.publicKey, player, asset)], [this.actor], { label: 'settle run' });
   }
 
   // ----------------------------------------------------- Sirocco Reserve

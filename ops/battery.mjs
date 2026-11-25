@@ -21,10 +21,11 @@ import { Keypair, SystemProgram } from '@solana/web3.js';
 import { Climber, readPrice } from '../js/chain/climber.js';
 import { MARKETS, MAX_PRICE_AGE, ONE_USDC, PACK, PACKS, PROGRAM_ID, RUN, LADDER, VAULT } from '../js/chain/config.js';
 let reserveSummary = '';
-import { RUN_SIZE, decodeLender, decodeReserve, decodeRun } from '../js/chain/codec.js';
+import { RUN_SIZE, decodeDesk, decodeLender, decodeReserve, decodeRun } from '../js/chain/codec.js';
 import { borrowCost, exposureOf, lineOf, valueOf } from '../js/chain/reserve.js';
 import { ix } from '../js/chain/ix.js';
-import { lenderPda, profilePda, reservePda, runPda } from '../js/chain/pdas.js';
+import { deskPda, escrowOf, lenderPda, profilePda, reservePda, runPda } from '../js/chain/pdas.js';
+const tokenBalance = async (acc) => { const a = await base.getAccountInfo(acc); return a ? Number(Buffer.from(a.data).readBigUInt64LE(64)) : 0; };
 import { inSession } from '../js/chain/hours.js';
 import { errorCode, send, sleep } from '../js/chain/tx.js';
 import { pushOnce } from '../js/chain/relay.js';
@@ -37,7 +38,7 @@ const base = baseConnection(), er = erConnection(), admin = adminKeypair();
 
 // the xStocks' prices reach the rollup through the relay: keep it pushing during the battery
 let relayOn = true;
-(async () => { const relayer = namedKeypair('relayer'); while (relayOn) { await pushOnce(er, relayer, { minGapS: 0 }).catch(() => {}); await sleep(700); } })();
+(async () => { const relayer = namedKeypair('relayer'); while (relayOn) { await pushOnce(er, relayer, { minGapS: 0, base }).catch(() => {}); await sleep(700); } })();
 const T0 = Date.now();
 const say = (...a) => console.log(`[${((Date.now() - T0) / 1000).toFixed(0).padStart(4)}s]`, ...a);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -135,12 +136,17 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   await timed('stake + delegate (Solana)', () => send(base, [
     ...grow,
     ix.startRun(a.publicKey, c.me, { asset, side: side === 'short' ? 1 : 0, stake: BigInt(stake * ONE_USDC), usePack: !!opts.pack }, c.token),
+    ix.openPosition(a.publicKey, c.me, asset),
     ix.delegateRun(a.publicKey, c.me),
   ], [a], { label: 'start' }));
+  // the real position: long tokens in the climb's escrow, short tokens borrowed and sold
+  const escrow = escrowOf(c.me, MARKETS[asset].mintKey);
+  const esc0 = await tokenBalance(escrow), rs0 = decodeRun((await base.getAccountInfo(runPda(c.me))).data);
+  check(tag, `real position opened (${side})`, rs0.unitsOpen > 0 && (side === 'short' ? esc0 === 0 : esc0 === rs0.unitsOpen), `units ${rs0.unitsOpen} escrow ${esc0}`);
   await timed('delegation visible on the rollup', () => c.waitOnEr(runPda(c.me), (d) => decodeRun(d).status === RUN.STAKED));
   if (opts.refusals) {
     await refuse(tag, 'begin with another market\'s feed', 6012, () => send(er, [ix.beginRun(a.publicKey, c.me, (asset + 1) % MARKETS.length)], [a], { label: 'bad feed', attempts: 1 }));
-    await refuse(tag, 'settle while the climb is on the rollup', 3007, () => send(base, [ix.settleRun(a.publicKey, c.me)], [a], { label: 'early settle', attempts: 1 }));
+    await refuse(tag, 'settle while the climb is on the rollup', 3007, () => send(base, [ix.settleRun(a.publicKey, c.me, 0)], [a], { label: 'early settle', attempts: 1 }));
     await refuse(tag, 'a second climb while one is delegated', 3007, () => send(base, [ix.startRun(a.publicKey, c.me, { asset, side: 0, stake: 10n * BigInt(ONE_USDC) }, c.token)], [a], { label: 'second', attempts: 1 }));
   }
   await timed('begin + crank (rollup)', () => send(er, [ix.beginRun(a.publicKey, c.me, asset, true)], [a], { label: 'begin' }));
@@ -181,17 +187,21 @@ async function soloClimb(c, i, wave, markets, opts = {}) {
   const want = opts.pack ? Math.max(0, fin.value - fin.stake) : fin.value - loan;
   check(tag, 'payout = position - borrow cost (pack: the gain only)', fin.payout === want && fin.cost === loan && after - before === want - cost, `paid ${fin.payout / 1e6} cost ${fin.cost / 1e6} delta ${(after - before) / 1e6}`);
   check(tag, 'reservation released at settlement', fin.reserved === 0 && fin.line === 0);
+  check(tag, 'position closed: escrow empty, real P&L + game boost = the result', (await tokenBalance(escrow)) === 0 && fin.realPnl + fin.boostPnl === fin.value - fin.stake && fin.exitFill > 0,
+    `real ${fin.realPnl / 1e6} boost ${fin.boostPnl / 1e6}`);
   costs.push(fin.cost); flows.push(cost - fin.payout);
   const prof1 = await c.profile();
   check(tag, 'profile records the climb', prof1.runs === prof0.runs + 1 && prof1.history[0].stake === fin.stake, `runs ${prof0.runs}->${prof1.runs}`);
-  await refuse(tag, 'settle twice', 6011, () => send(base, [ix.settleRun(c.actor.publicKey, c.me)], [c.actor], { label: 'twice', attempts: 1 }));
+  await refuse(tag, 'settle twice', 6011, () => send(base, [ix.settleRun(c.actor.publicKey, c.me, 0)], [c.actor], { label: 'twice', attempts: 1 }));
   return { status: erState.status, pnl: (fin.value - fin.stake) / 1e6, maxStep: fin.maxStep, ticks: fin.ticks };
 }
 
 const results = [], costs = [], flows = [];
+// the reserve's cash as the program counts it: the vault, plus the desk's open long cost, less its open short proceeds
 const readReserve = async () => {
-  const [a, v] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT)]);
-  return { ...decodeReserve(a.data), vault: Number(v.value.amount) };
+  const [a, v, d] = await Promise.all([base.getAccountInfo(reservePda()), base.getTokenAccountBalance(VAULT), base.getAccountInfo(deskPda())]);
+  const desk = decodeDesk(d.data);
+  return { ...decodeReserve(a.data), vault: Number(v.value.amount) + desk.openLongCost - desk.openShortProceeds };
 };
 const reserve0 = await readReserve();
 

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="play.css?v=15">
+  <link rel="stylesheet" href="play.css?v=16">
 </head>
 <body data-screen="intro">
   <div class="stage" id="stage" aria-hidden="true">
@@ -165,6 +165,7 @@
         <li><b>Pick a market, a direction and a stake.</b> Tokenized stocks (TSLAx, NVDAx, AAPLx, GMEx) or tokenized gold (XAUt), all open 24/7, long or short.</li>
         <li><b>The coin rolls on the live price.</b> When the price goes your way it climbs a step, when it turns it steps down. Big moves, big jumps. Your leverage grows every 6 seconds, from 1x to 4x.</li>
         <li><b>Cash out whenever you want.</b> If the price runs too far against you, the stairs give way and the coin falls. You lose your stake, never more.</li>
+        <li><b>A real position.</b> Long, your climb buys the token (real tokens in its escrow); short, it borrows and sells it. The game magnifies the moves (shown as "moves ×90"): the result splits what the tokens made from the game's boost.</li>
       </ol>
       <h3>Sirocco Reserve</h3>
       <p>Leverage is a real loan. At 3x your stake of 25 tUSDC is a 75 tUSDC position: 50 are borrowed from the Sirocco Reserve, a pool of tUSDC lent by anyone. The loan costs a 0.1% fee on the most you borrowed plus 36.5% APR for the seconds you held it, taken when you cash out. Win or lose, the reserve takes the other side, and you never owe more than your stake.</p>
@@ -192,6 +193,7 @@
       <h2 id="reserve-title">Sirocco Reserve</h2>
       <p>The tUSDC pool every climb borrows from. A climb's stake plus the reserve's money make its leveraged position; lenders earn the borrow fees and take the other side of every climb. Players never lose more than their stake.</p>
       <dl class="reserve__stats" id="resStats"></dl>
+      <div class="reserve__desk" id="resDesk"></div>
       <div class="reserve__me" id="resMe"></div>
       <div class="reserve__form">
         <label class="reserve__amt"><input id="resAmt" type="number" inputmode="decimal" min="1" step="1" value="100" aria-label="Amount in tUSDC"><span>tUSDC</span></label>
@@ -238,6 +240,6 @@
   </script>
 
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "@solana/web3.js": "./js/vendor/solana.mjs", "buffer": "./js/vendor/buffer.mjs" } }</script>
-  <script type="module" src="js/game.js?v=21"></script>
+  <script type="module" src="js/game.js?v=22"></script>
 </body>
 </html>

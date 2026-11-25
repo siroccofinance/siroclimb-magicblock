@@ -3,6 +3,7 @@
 //! profiles and leverage packs.
 use anchor_lang::prelude::*;
 
+use crate::desk::{ask, bid, units_for, EXPONENTS};
 use crate::reserve::{borrowed_at, MAX_PAYOUT_MULT};
 
 /// TSLAx, NVDAx, AAPLx, XAU (gold), GMEx, in that order everywhere.
@@ -116,6 +117,8 @@ pub enum ClimbError {
     NotEnoughLiquidity,
     #[msg("Not enough reserve shares")]
     BadShares,
+    #[msg("The climb has no position yet")]
+    NoPosition,
 }
 
 /// The ladder step at `t` seconds into a climb, capped at `top`.
@@ -263,6 +266,24 @@ pub struct Run {
     /// Liquidity reserved for this climb, and its borrow line, released at settlement.
     pub reserved: u64,
     pub line: u64,
+    // Real position (appended: older run accounts are grown by `grow_run`), see `desk.rs`.
+    /// Market token units bought (long) or borrowed and sold (short) at the opening fill, in the escrow
+    /// for the whole climb (long), and in total including the leverage steps booked on the rollup.
+    pub units_open: u64,
+    pub units: u64,
+    /// tUSDC paid for those units (long) or received for them (short): at the opening fill, and in total.
+    pub notional_open: u64,
+    pub notional: u64,
+    /// Opening fill price and closing fill price (raw, the relay's units, spread included).
+    pub fill_price: u64,
+    pub exit_fill: u64,
+    /// Last ladder step whose fill is booked.
+    pub booked_step: u8,
+    pub spread_bps: u16,
+    pub decimals: u8,
+    /// At settlement: what the tokens made, and the rest of the climb's result (the game's boost).
+    pub real_pnl: i64,
+    pub boost_pnl: i64,
 }
 
 impl Run {
@@ -280,6 +301,7 @@ impl Run {
         self.value = moved(self.value, LADDER[step as usize], self.side, BOOST[self.asset as usize], self.last_price, price)
             .min(self.stake.saturating_mul(MAX_PAYOUT_MULT));
         self.borrowed = borrowed_at(self.stake, step);
+        self.book_steps(step, price);
         self.last_price = price;
         self.last_tick_ts = now;
         self.ticks += 1;
@@ -290,6 +312,22 @@ impl Run {
         } else if now - self.start_ts >= RUN_SECONDS {
             self.status = RUN_EXPIRED;
             self.end_ts = self.start_ts + RUN_SECONDS;
+        }
+    }
+
+    /// Each new leverage step adds stake x 0.5 of position: a long buys that much more of the token
+    /// with the money it borrows, a short borrows and sells that much more, at this tick's price.
+    pub fn book_steps(&mut self, step: u8, price: u64) {
+        if self.units_open == 0 || price == 0 {
+            return;
+        }
+        while self.booked_step < step {
+            let s = self.booked_step as usize + 1;
+            let usdc = self.stake * (LADDER[s] - LADDER[s - 1]) as u64 / 10;
+            let px = if self.side == SIDE_SHORT { bid(price, self.spread_bps) } else { ask(price, self.spread_bps) };
+            self.units += units_for(usdc, px, EXPONENTS[self.asset as usize], self.decimals);
+            self.notional += usdc;
+            self.booked_step += 1;
         }
     }
 
@@ -370,7 +408,57 @@ mod tests {
             cost: 0,
             reserved: 0,
             line: 0,
+            units_open: 0,
+            units: 0,
+            notional_open: 0,
+            notional: 0,
+            fill_price: 0,
+            exit_fill: 0,
+            booked_step: 0,
+            spread_bps: 0,
+            decimals: 0,
+            real_pnl: 0,
+            boost_pnl: 0,
         }
+    }
+
+    #[test]
+    fn leverage_steps_buy_more_tokens_at_the_tick_price() {
+        let mut r = live_run();
+        // opened 10 tUSDC long of an 8-decimal token at 1.00000 (raw 100_000, exp -5) + 5 bps
+        r.asset = 0;
+        r.entry_price = 100_000;
+        r.last_price = 100_000;
+        r.spread_bps = 5;
+        r.decimals = 8;
+        r.units_open = crate::desk::units_for(10_000_000, 100_050, -5, 8);
+        r.units = r.units_open;
+        r.notional_open = 10_000_000;
+        r.notional = 10_000_000;
+        r.advance(100_000, 1013); // two steps (1.5x, 2x): 10 tUSDC more, bought at 1.0005
+        assert_eq!(r.booked_step, 2);
+        assert_eq!(r.notional, 20_000_000);
+        assert!(r.units.abs_diff(2 * r.units_open) <= 2);
+        r.advance(110_000, 1019); // step 3 at 1.10: 5 tUSDC buys fewer tokens
+        assert_eq!(r.booked_step, 3);
+        assert_eq!(r.notional, 25_000_000);
+        assert!((r.units - 2 * r.units_open).abs_diff(crate::desk::units_for(5_000_000, crate::desk::ask(110_000, 5), -5, 8)) <= 2);
+        // a short books the same notional, sold at the bid
+        let mut s = live_run();
+        s.side = SIDE_SHORT;
+        s.spread_bps = 5;
+        s.decimals = 8;
+        s.units_open = 1;
+        s.units = 1;
+        s.notional_open = 10_000_000;
+        s.notional = 10_000_000;
+        s.advance(1_000_000, 1007);
+        assert_eq!(s.notional, 15_000_000);
+        assert_eq!(s.units, 1 + crate::desk::units_for(5_000_000, crate::desk::bid(1_000_000, 5), -5, 8));
+        // a climb without a position books nothing
+        let mut n = live_run();
+        n.advance(1_000_000, 1013);
+        assert_eq!(n.units, 0);
     }
 
     #[test]

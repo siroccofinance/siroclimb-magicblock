@@ -12,7 +12,10 @@ import { Buffer } from 'buffer';
 import { MARKETS, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../js/chain/config.js';
 import { ataOf, configPda, lenderPda, reservePda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
-import { RUN_SIZE, decodeLender, decodeReserve, decodeRun, discriminator } from '../../js/chain/codec.js';
+import { RUN_SIZE, decodeDesk, decodeLender, decodeReserve, decodeRun, discriminator } from '../../js/chain/codec.js';
+import { bal22, pushQuotes, setupDesk } from './desk-fixture.mjs';
+import { deskPda, escrowOf } from '../../js/chain/pdas.js';
+let desk = null;
 import { borrowCost, valueOf } from '../../js/chain/reserve.js';
 
 const svm = new LiteSVM();
@@ -50,6 +53,7 @@ function at(ts) {
   const c = svm.getClock();
   c.unixTimestamp = BigInt(ts); c.slot = c.slot + 10n;
   svm.setClock(c); setPrice(ts); svm.expireBlockhash();
+  if (desk) pushQuotes(send, desk.relayer, ts, [price, price, price, price, price]);
 }
 function send(ixs, signers) {
   const tx = new Transaction().add(...ixs);
@@ -65,7 +69,9 @@ function send(ixs, signers) {
 const reserve = () => decodeReserve(Buffer.from(svm.getAccount(reservePda()).data));
 const lender = (k) => decodeLender(Buffer.from(svm.getAccount(lenderPda(k)).data));
 const run = (k) => decodeRun(Buffer.from(svm.getAccount(runPda(k)).data));
-const assets = () => balanceOf(VAULT) - reserve().staked;
+const deskState = () => decodeDesk(Buffer.from(svm.getAccount(deskPda()).data));
+// the reserve's assets: the vault plus the tUSDC paid the desk for open long positions, less the stakes in flight
+const assets = () => balanceOf(VAULT) + deskState().openLongCost - deskState().openShortProceeds - reserve().staked;
 
 const admin = Keypair.generate(), lend = Keypair.generate(), player = Keypair.generate(), late = Keypair.generate();
 for (const k of [admin, lend, player, late]) svm.airdrop(k.publicKey, BigInt(10 * LAMPORTS_PER_SOL));
@@ -83,6 +89,8 @@ r = send([ix.initReserve(lend.publicKey)], [lend]);
 ok('only the admin opens the reserve (Unauthorized 6000)', !r.ok && r.code === 6000, `code ${r.code}`);
 r = send([ix.initReserve(admin.publicKey)], [admin]);
 ok('init_reserve: 200 tUSDC bankroll = 200 admin shares', r.ok && reserve().shares === 200 * U && lender(admin.publicKey).shares === 200 * U, r.logs.slice(-2).join(' '));
+desk = setupDesk(svm, send, admin); at(t0);
+ok('the Sirocco desk opens', desk.ok, desk.logs.slice(-2).join(' '));
 
 // --- a lender deposits at 1.0
 r = send([ix.deposit(lend.publicKey, lend.publicKey, BigInt(300 * U))], [lend]);
@@ -92,10 +100,11 @@ ok('a stranger cannot deposit from someone else (Unauthorized 6000)', !r.ok && r
 
 // --- a solo climb draws on the reserve
 const stake = 100 * U;
-r = send([ix.startRun(player.publicKey, player.publicKey, { asset: TSLA, side: 0, stake: BigInt(stake) })], [player]);
+r = send([ix.startRun(player.publicKey, player.publicKey, { asset: TSLA, side: 0, stake: BigInt(stake) }), ix.openPosition(player.publicKey, player.publicKey, TSLA)], [player]);
 let rs = reserve(), rn = run(player.publicKey);
 ok('start: stake in, 4 x stake reserved, borrow line 3 x stake', r.ok && rs.staked === stake && rs.reserved === 4 * stake && rs.lines === 3 * stake && rn.reserved === 4 * stake && rn.line === 3 * stake,
   `${r.ok} staked ${rs.staked} reserved ${rs.reserved} lines ${rs.lines}`);
+ok('the stake bought TSLAx into the climb\'s escrow (the reserve paid the desk)', Number(bal22(svm, escrowOf(player.publicKey, MARKETS[TSLA].mintKey))) === rn.unitsOpen && rn.unitsOpen > 0 && deskState().openLongCost === stake, `escrow ${bal22(svm, escrowOf(player.publicKey, MARKETS[TSLA].mintKey))} units ${rn.unitsOpen}`);
 ok('a new run account has the reserve layout', svm.getAccount(runPda(player.publicKey)).data.length === RUN_SIZE, `${svm.getAccount(runPda(player.publicKey)).data.length} bytes`);
 const free = assets() - rs.reserved;
 r = send([ix.withdraw(lend.publicKey, lend.publicKey, BigInt(300 * U))], [lend]);
@@ -114,15 +123,16 @@ ok('expired at the bell, top leverage 4x', rn.status === 5 && rn.maxStep === 6, 
 // settle: payout = value - borrow cost; the reserve keeps the cost and pays (or keeps) the rest
 const vaultBefore = balanceOf(VAULT), assetsBefore = assets(), lendSharesValue = () => valueOf(lender(lend.publicKey).shares, assets(), reserve().shares);
 const lendBefore = lendSharesValue(), playerBefore = balanceOf(ataOf(player.publicKey, USDC_MINT));
-r = send([ix.settleRun(player.publicKey, player.publicKey)], [player]);
+r = send([ix.settleRun(player.publicKey, player.publicKey, TSLA)], [player]);
 rn = run(player.publicKey); rs = reserve();
 const cost = borrowCost(stake, rn.endTs - rn.startTs, rn.top, rn.maxStep);
 const paid = balanceOf(ataOf(player.publicKey, USDC_MINT)) - playerBefore;
 ok('settle charges the borrow cost (fee on the peak borrow + interest), as the front computes it', r.ok && rn.cost === cost && cost > 0, `cost ${rn.cost} expected ${cost}`);
 ok('the player gets value - cost', paid === rn.value - rn.cost, `paid ${paid} value ${rn.value}`);
 ok('reservation, line and stake released', rs.reserved === 0 && rs.lines === 0 && rs.staked === 0, `reserved ${rs.reserved} lines ${rs.lines} staked ${rs.staked}`);
-ok('lender assets move by stake - payout', assets() - assetsBefore === stake - paid && vaultBefore - balanceOf(VAULT) === paid, `delta ${(assets() - assetsBefore) / U}`);
-ok('the lender\'s position moves with the climb result', lendSharesValue() - lendBefore === Math.floor(((stake - paid) * 300) / 500) || Math.abs(lendSharesValue() - lendBefore - ((stake - paid) * 300) / 500) <= 1,
+ok('the position closed: escrow empty, real P&L recorded, the boost is the rest', bal22(svm, escrowOf(player.publicKey, MARKETS[TSLA].mintKey)) === 0n && rn.realPnl !== 0 && rn.boostPnl === rn.value - stake - rn.realPnl, `real ${rn.realPnl} boost ${rn.boostPnl}`);
+ok('lender assets move by stake - payout + the real P&L the desk paid', assets() - assetsBefore === stake - paid + rn.realPnl, `delta ${(assets() - assetsBefore) / U} expected ${(stake - paid + rn.realPnl) / U}`);
+ok('the lender\'s position moves with the climb result', Math.abs(lendSharesValue() - lendBefore - ((stake - paid + rn.realPnl) * 300) / 500) <= 1,
   `${(lendSharesValue() - lendBefore) / U} tUSDC`);
 ok('reserve counters: fees, runs, borrowed volume', rs.fees === cost && rs.runs === 1 && rs.borrowedVolume === 3 * stake, `fees ${rs.fees} runs ${rs.runs} volume ${rs.borrowedVolume}`);
 
@@ -135,9 +145,9 @@ ok('withdrawing shares one does not hold is refused (BadShares 6029)', !r.ok && 
 
 // --- the utilization guard: the admin's ~200 tUSDC left cannot back a 100 tUSDC climb (4 x 100 reserved)
 at(t0 + 120);
-r = send([ix.startRun(late.publicKey, late.publicKey, { asset: TSLA, side: 1, stake: BigInt(100 * U) })], [late]);
+r = send([ix.startRun(late.publicKey, late.publicKey, { asset: TSLA, side: 1, stake: BigInt(100 * U) }), ix.openPosition(late.publicKey, late.publicKey, TSLA)], [late]);
 ok('a 100 tUSDC climb the reserve cannot cover is refused (ReserveFull 6027)', !r.ok && r.code === 6027, `assets ${(assets() / U).toFixed(2)} code ${r.code}`);
-r = send([ix.startRun(late.publicKey, late.publicKey, { asset: TSLA, side: 1, stake: BigInt(40 * U) })], [late]);
+r = send([ix.startRun(late.publicKey, late.publicKey, { asset: TSLA, side: 1, stake: BigInt(40 * U) }), ix.openPosition(late.publicKey, late.publicKey, TSLA)], [late]);
 ok('a 40 tUSDC climb it can cover starts', r.ok && reserve().reserved === 160 * U, r.logs.slice(-2).join(' '));
 
 // --- a run account from before the reserve (168 bytes) is grown in place, then plays

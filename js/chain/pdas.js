@@ -2,7 +2,7 @@
 // whole state can be found without an indexer.
 import { PublicKey } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, PROGRAM_ID, SESSION_PROGRAM_ID, TOKEN_PROGRAM_ID, VRF_PROGRAM_ID } from './config.js';
+import { ATA_PROGRAM_ID, DELEGATION_PROGRAM_ID, PROGRAM_ID, SESSION_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, VRF_PROGRAM_ID } from './config.js';
 
 const pda = (seeds, program = PROGRAM_ID) => PublicKey.findProgramAddressSync(seeds, program)[0];
 const s = (t) => Buffer.from(t);
@@ -28,6 +28,15 @@ export const sessionTokenPda = (sessionSigner, authority) =>
   pda([s('session_token_v2'), PROGRAM_ID.toBuffer(), sessionSigner.toBuffer(), authority.toBuffer()], SESSION_PROGRAM_ID);
 
 export const ataOf = (owner, mint) => pda([owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()], ATA_PROGRAM_ID);
+/// Associated token account under Token-2022 (the market tokens).
+export const ata22Of = (owner, mint) => pda([owner.toBuffer(), TOKEN_2022_PROGRAM_ID.toBuffer(), mint.toBuffer()], ATA_PROGRAM_ID);
+
+/// The Sirocco desk (swap venue), the relay's prices on Solana, and the stock-lending book.
+export const deskPda = () => pda([s('desk')]);
+export const quotesPda = () => pda([s('quotes')]);
+export const lendPda = () => pda([s('stock_lend')]);
+/// A climb's escrow for a market token: the run PDA's Token-2022 account.
+export const escrowOf = (player, mint) => ata22Of(runPda(player), mint);
 
 // Delegation program accounts for a delegated PDA.
 export const bufferPda = (account) => pda([s('buffer'), account.toBuffer()], PROGRAM_ID);

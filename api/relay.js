@@ -2,10 +2,11 @@
 // program's relay accounts on the rollup (gasless). Called by browsers while
 // the game is open, and by the keeper; pushes at most about once a second.
 // Vercel's cron calls it every minute and it then keeps pushing every second for
-// 55 s, so the prices stay live with nobody on the site.
+// 55 s, so the prices stay live with nobody on the site. The same pushes keep
+// the Solana quotes (what positions open at) under 10 s old.
 // Needs RELAYER_SECRET_KEY (JSON array of the relay keypair, server-side only).
 import { Keypair } from '@solana/web3.js';
-import { erConnection } from './_lib.js';
+import { baseConnection, erConnection } from './_lib.js';
 import { pushOnce } from '../js/chain/relay.js';
 
 let relayer = null;
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
       const end = Date.now() + 55000; let n = 0, err = 0;
       while (Date.now() < end) {
         const t = Date.now();
-        await pushOnce(erConnection(), relayer, { minGapS: 1 }).then((o) => { if (o.sig) n++; }).catch(() => { err++; });
+        await pushOnce(erConnection(), relayer, { minGapS: 1, base: baseConnection() }).then((o) => { if (o.sig) n++; }).catch(() => { err++; });
         last = Date.now();
         await new Promise((r) => setTimeout(r, Math.max(0, 1000 - (Date.now() - t))));
       }
@@ -31,7 +32,7 @@ export default async function handler(req, res) {
     }
     if (Date.now() - last < 700) { res.statusCode = 200; return res.end(JSON.stringify({ skipped: true })); }
     last = Date.now();
-    const out = await pushOnce(erConnection(), relayer, { minGapS: 1 });
+    const out = await pushOnce(erConnection(), relayer, { minGapS: 1, base: baseConnection() });
     res.statusCode = 200;
     res.end(JSON.stringify(out));
   } catch (e) {

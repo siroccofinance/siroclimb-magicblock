@@ -28,7 +28,7 @@ say('keeper', short(keeperKey.publicKey));
 
 // relay
 const relayer = namedKeypair('relayer');
-(async () => { for (;;) { await pushOnce(er, relayer, { minGapS: 0 }).catch((e) => say('relay', friendlyError(e))); await sleep(700); } })();
+(async () => { for (;;) { await pushOnce(er, relayer, { minGapS: 0, base }).catch((e) => say('relay', friendlyError(e))); await sleep(700); } })();
 
 const busy = new Set();
 const once = (k, fn) => { if (busy.has(k)) return; busy.add(k); fn().catch((e) => say(k, friendlyError(e))).finally(() => setTimeout(() => busy.delete(k), 2000)); };

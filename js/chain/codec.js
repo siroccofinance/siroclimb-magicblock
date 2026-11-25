@@ -24,7 +24,9 @@ function encodeArg(type, v) {
   }
   if (type === 'i32') { const b = Buffer.alloc(4); b.writeInt32LE(Number(v)); return b; }
   if (type === 'pubkey') return Buffer.from(v.toBytes());
+  if (type === 'u16') { const b = Buffer.alloc(2); b.writeUInt16LE(Number(v)); return b; }
   if (type.array && type.array[0] === 'u8') return Buffer.from(v);
+  if (type.array) return Buffer.concat(Array.from(v).map((x) => encodeArg(type.array[0], x)));
   throw new Error('unsupported arg type ' + JSON.stringify(type));
 }
 
@@ -64,10 +66,29 @@ export function decodeRun(data) {
     maxStep: r.u8(), ticks: r.u32(), payout: r.u64(), taskId: r.i64(),
     // Sirocco Reserve fields (zero on a run account from before the reserve)
     ...(r.skip(1), r.o + 32 <= r.d.length ? { borrowed: r.u64(), cost: r.u64(), reserved: r.u64(), line: r.u64() } : { borrowed: 0, cost: 0, reserved: 0, line: 0 }),
+    // real position (zero on a run account from before the desk)
+    ...(r.o + 64 <= r.d.length
+      ? { unitsOpen: r.u64(), units: r.u64(), notionalOpen: r.u64(), notional: r.u64(), fillPrice: r.u64(), exitFill: r.u64(), bookedStep: r.u8(),
+          spreadBps: (() => { const v = r.d.readUInt16LE(r.o); r.o += 2; return v; })(), decimals: r.u8(), realPnl: r.i64(), boostPnl: r.i64() }
+      : { unitsOpen: 0, units: 0, notionalOpen: 0, notional: 0, fillPrice: 0, exitFill: 0, bookedStep: 0, spreadBps: 0, decimals: 0, realPnl: 0, boostPnl: 0 }),
   };
 }
-/// Size of a run account with the reserve fields (older ones are grown by `grow_run`).
-export const RUN_SIZE = 8 + 32 + 32 + 4 + 6 + 8 * 8 + 1 + 4 + 8 + 8 + 1 + 4 * 8;
+
+export function decodeDesk(data) {
+  const r = new Reader(data);
+  const d = { admin: r.key(), spreadBps: (() => { const v = r.d.readUInt16LE(r.o); r.o += 2; return v; })(), mints: [], decimals: [] };
+  for (let i = 0; i < 5; i++) d.mints.push(r.key());
+  for (let i = 0; i < 5; i++) d.decimals.push(r.u8());
+  return { ...d, openLongCost: r.u64(), openShortProceeds: r.u64(), trades: r.u64(), volume: r.u64() };
+}
+export function decodeQuotes(data) {
+  const r = new Reader(data);
+  const relayer = r.key(), prices = [];
+  for (let i = 0; i < 5; i++) prices.push(r.u64());
+  return { relayer, prices, ts: r.i64(), updates: r.u64() };
+}
+/// Size of a run account with the reserve and position fields (older ones are grown by `grow_run`).
+export const RUN_SIZE = 8 + 32 + 32 + 4 + 6 + 8 * 8 + 1 + 4 + 8 + 8 + 1 + 4 * 8 + 6 * 8 + 1 + 2 + 1 + 2 * 8;
 
 export function decodeReserve(data) {
   const r = new Reader(data);

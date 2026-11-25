@@ -16,9 +16,9 @@
 // by the ops keeper. Pyth's Crypto.TSLAX/USD (Lazer 1847), NVDAX (1833),
 // AAPLX (1792) would drop in here once MagicBlock carries them.
 import { MARKETS, RELAY_ASSETS } from './config.js';
-import { decodeRelay } from './codec.js';
+import { decodeQuotes, decodeRelay } from './codec.js';
 import { ix } from './ix.js';
-import { relayPda } from './pdas.js';
+import { quotesPda, relayPda } from './pdas.js';
 import { send } from './tx.js';
 
 const MAX_GAP = 0.015;
@@ -71,13 +71,15 @@ export async function readRelays(er) {
   return Object.fromEntries(RELAY_ASSETS.map((a, i) => [a, accs[i] ? decodeRelay(accs[i].data) : null]));
 }
 
-/// Push the current prices (one rollup transaction for every xStock) unless
-/// the relays were updated less than `minGapS` ago.
-export async function pushOnce(er, relayer, { minGapS = 1 } = {}) {
-  const cur = await readRelays(er);
+/// Push the current prices (one rollup transaction for every market) unless the relays were updated less
+/// than `minGapS` ago. With `base`, also push them on Solana (the quotes positions open at) when those are
+/// older than `quoteGapS`: a Solana transaction, so about every 10 s rather than every second.
+export async function pushOnce(er, relayer, { minGapS = 1, base = null, quoteGapS = 10 } = {}) {
   const now = Math.floor(Date.now() / 1000);
+  const [cur, qa] = await Promise.all([readRelays(er), base ? base.getAccountInfo(quotesPda()).catch(() => null) : null]);
   const oldest = Math.min(...RELAY_ASSETS.map((a) => (cur[a] ? cur[a].ts : 0)));
-  if (now - oldest < minGapS) return { skipped: true };
+  const quotesDue = !!(base && qa && now - decodeQuotes(qa.data).ts >= quoteGapS);
+  if (now - oldest < minGapS && !quotesDue) return { skipped: true };
   const q = await fetchQuotes();
   // Jupiter's price hops between routes (a few tenths of a percent): ease it from
   // the price on chain, a third of the way per push, at most 0.15 % a second
@@ -86,8 +88,18 @@ export async function pushOnce(er, relayer, { minGapS = 1 } = {}) {
     const step = Math.max(-0.0015, Math.min(0.0015, (q[a].raw / cur[a].raw - 1) / 3));
     q[a].raw = Math.round(cur[a].raw * (1 + step)); q[a].price = q[a].raw * 10 ** MARKETS[a].exponent;
   }
-  const ixs = RELAY_ASSETS.filter((a) => q[a]).map((a) => ix.pushPrice(relayer.publicKey, a, BigInt(q[a].raw), BigInt(Math.max(q[a].ts, cur[a] ? cur[a].ts : 0))));
-  if (!ixs.length) return { skipped: true, reason: 'no quotes' };
-  const sig = await send(er, ixs, [relayer], { label: 'push prices', attempts: 1, tries: 20 });
-  return { sig, prices: Object.fromEntries(Object.entries(q).map(([a, v]) => [MARKETS[a].id, `${v.price.toFixed(3)} ${v.src}`])) };
+  const out = { prices: Object.fromEntries(Object.entries(q).map(([a, v]) => [MARKETS[a].id, `${v.price.toFixed(3)} ${v.src}`])) };
+  const jobs = [];
+  if (now - oldest >= minGapS) {
+    const ixs = RELAY_ASSETS.filter((a) => q[a]).map((a) => ix.pushPrice(relayer.publicKey, a, BigInt(q[a].raw), BigInt(Math.max(q[a].ts, cur[a] ? cur[a].ts : 0))));
+    if (ixs.length) jobs.push(send(er, ixs, [relayer], { label: 'push prices', attempts: 1, tries: 20 }).then((sig) => { out.sig = sig; }));
+  }
+  if (quotesDue) {
+    // a market whose source did not answer keeps its last quote (0 = unchanged on chain)
+    const prices = MARKETS.map((m, a) => (q[a] ? BigInt(q[a].raw) : 0n));
+    jobs.push(send(base, [ix.pushQuotes(relayer.publicKey, prices, BigInt(now))], [relayer], { label: 'push quotes', attempts: 1, tries: 40 }).then((sig) => { out.quotes = sig; }));
+  }
+  await Promise.all(jobs);
+  if (!out.sig && !out.quotes) return { skipped: true, reason: 'no quotes' };
+  return out;
 }

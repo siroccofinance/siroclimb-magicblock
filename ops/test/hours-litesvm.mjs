@@ -14,6 +14,8 @@ import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, RELAY_ASSETS, TOKEN_PROGR
 import { configPda, ataOf, roundSlotPda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { decodeRun, discriminator } from '../../js/chain/codec.js';
+import { pushQuotes, setupDesk } from './desk-fixture.mjs';
+let desk = null;
 
 const svm = new LiteSVM();
 svm.addProgramFromFile(PROGRAM_ID, new URL('../../chain/target/deploy/siroclimb.so', import.meta.url).pathname);
@@ -57,6 +59,7 @@ function at(ts) {
   svm.setClock(c);
   setPrice(ts);
   svm.expireBlockhash();
+  if (desk) pushQuotes(send, desk.relayer, ts);
 }
 function send(ixs, signers) {
   const tx = new Transaction().add(...ixs);
@@ -80,12 +83,14 @@ let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
 ok('initialize', r.ok, r.logs.slice(-2).join(' '));
 r = send([ix.initReserve(admin.publicKey)], [admin]);
 ok('the Sirocco Reserve opens on the bankroll', r.ok, r.logs.slice(-2).join(' '));
+desk = setupDesk(svm, send, admin);
+ok('the Sirocco desk opens', desk.ok, desk.logs.slice(-2).join(' '));
 r = send([createAtaIdempotent(player.publicKey, player.publicKey), ix.faucet(player.publicKey), ix.initProfile(player.publicKey, 'nomad_trader')], [player]);
 ok('player: token account, faucet, profile', r.ok, r.logs.slice(-2).join(' '));
 
 const stake = (label, when, expectCode, asset = XAU, who = player) => {
   at(utc(when));
-  const res = send([ix.startRun(who.publicKey, who.publicKey, { asset, side: 0, stake: 10_000_000n })], [who]);
+  const res = send([ix.startRun(who.publicKey, who.publicKey, { asset, side: 0, stake: 10_000_000n }), ix.openPosition(who.publicKey, who.publicKey, asset)], [who]);
   if (expectCode) ok(`${label}: stake refused with ${expectCode}`, !res.ok && res.code === expectCode, `code ${res.code}`);
   else ok(`${label}: stake accepted`, res.ok, res.logs.slice(-3).join(' '));
   return res.ok;
@@ -126,7 +131,7 @@ for (const [label, when] of [['Thanksgiving 15:00', '2026-11-26T20:00:00Z'], ['1
   at(utc('2026-12-06T15:00:00Z'));
   const d = Buffer.from(svm.getAccount(MARKETS[TSLA].feedKey).data); d.writeBigInt64LE(BigInt(utc('2026-12-06T14:59:00Z')), 21);
   svm.setAccount(MARKETS[TSLA].feedKey, { lamports: Number(rent(70)), data: d, owner: PROGRAM_ID, executable: false });
-  const st = send([ix.startRun(p.publicKey, p.publicKey, { asset: TSLA, side: 0, stake: 10_000_000n })], [p]);
+  const st = send([ix.startRun(p.publicKey, p.publicKey, { asset: TSLA, side: 0, stake: 10_000_000n }), ix.openPosition(p.publicKey, p.publicKey, TSLA)], [p]);
   ok('stake on Solana (no price read)', st.ok, st.logs.slice(-2).join(' '));
   const res = send([ix.beginRun(p.publicKey, p.publicKey, TSLA, false)], [p]);
   ok('a relay price a minute old: the climb cannot begin (StalePrice 6013)', !res.ok && res.code === 6013, `code ${res.code}`);
