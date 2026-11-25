@@ -13,7 +13,7 @@ import { MARKETS, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../j
 import { ataOf, configPda, lenderPda, reservePda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { RUN_SIZE, decodeDesk, decodeLender, decodeReserve, decodeRun, discriminator } from '../../js/chain/codec.js';
-import { bal22, pushQuotes, setupDesk } from './desk-fixture.mjs';
+import { bal22, pushQuotes, setupDesk, writeConfig, writeReserve } from './desk-fixture.mjs';
 import { deskPda, escrowOf } from '../../js/chain/pdas.js';
 let desk = null;
 import { borrowCost, valueOf } from '../../js/chain/reserve.js';
@@ -77,18 +77,16 @@ const admin = Keypair.generate(), lend = Keypair.generate(), player = Keypair.ge
 for (const k of [admin, lend, player, late]) svm.airdrop(k.publicKey, BigInt(10 * LAMPORTS_PER_SOL));
 const t0 = Math.floor(Date.parse('2026-11-23T15:00:00Z') / 1000); // Monday 10:00 New York
 at(t0);
-let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
-ok('initialize', r.ok, r.logs.slice(-2).join(' '));
+writeConfig(svm, admin.publicKey);
+let r = { ok: true, logs: [] };
 for (const k of [admin, lend, player, late]) {
   r = send([createAtaIdempotent(k.publicKey, k.publicKey), ix.faucet(k.publicKey), ix.initProfile(k.publicKey, 'p' + k.publicKey.toBase58().slice(0, 6))], [k]);
   if (!r.ok) ok('player setup', false, r.logs.slice(-3).join(' '));
 }
 
 // --- the bankroll becomes the admin's position
-r = send([ix.initReserve(lend.publicKey)], [lend]);
-ok('only the admin opens the reserve (Unauthorized 6000)', !r.ok && r.code === 6000, `code ${r.code}`);
-r = send([ix.initReserve(admin.publicKey)], [admin]);
-ok('init_reserve: 200 tUSDC bankroll = 200 admin shares', r.ok && reserve().shares === 200 * U && lender(admin.publicKey).shares === 200 * U, r.logs.slice(-2).join(' '));
+writeReserve(svm, admin.publicKey, 200 * U, t0);   // as init_reserve wrote it (removed after setup)
+ok('the 200 tUSDC bankroll = 200 admin shares', r.ok && reserve().shares === 200 * U && lender(admin.publicKey).shares === 200 * U, r.logs.slice(-2).join(' '));
 desk = setupDesk(svm, send, admin); at(t0);
 ok('the Sirocco desk opens', desk.ok, desk.logs.slice(-2).join(' '));
 

@@ -14,7 +14,7 @@ import { MARKETS, PRICE_ORACLE_PROGRAM_ID, PROGRAM_ID, RELAY_ASSETS, TOKEN_PROGR
 import { configPda, ataOf, roundSlotPda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { decodeRun, discriminator } from '../../js/chain/codec.js';
-import { pushQuotes, setupDesk } from './desk-fixture.mjs';
+import { pushQuotes, setupDesk, writeConfig, writeReserve } from './desk-fixture.mjs';
 let desk = null;
 
 const svm = new LiteSVM();
@@ -79,10 +79,10 @@ svm.airdrop(player.publicKey, BigInt(10 * LAMPORTS_PER_SOL));
 const utc = (s) => Math.floor(Date.parse(s) / 1000);
 
 at(utc('2026-11-23T15:00:00Z'));
-let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
-ok('initialize', r.ok, r.logs.slice(-2).join(' '));
-r = send([ix.initReserve(admin.publicKey)], [admin]);
-ok('the Sirocco Reserve opens on the bankroll', r.ok, r.logs.slice(-2).join(' '));
+// the config and the reserve as their (one-time, since removed) setup instructions wrote them
+writeConfig(svm, admin.publicKey);
+writeReserve(svm, admin.publicKey, 1_000_000_000_000);
+let r = { ok: true, logs: [] };
 desk = setupDesk(svm, send, admin);
 ok('the Sirocco desk opens', desk.ok, desk.logs.slice(-2).join(' '));
 r = send([createAtaIdempotent(player.publicKey, player.publicKey), ix.faucet(player.publicKey), ix.initProfile(player.publicKey, 'nomad_trader')], [player]);
@@ -137,25 +137,7 @@ for (const [label, when] of [['Thanksgiving 15:00', '2026-11-26T20:00:00Z'], ['1
   ok('a relay price a minute old: the climb cannot begin (StalePrice 6013)', !res.ok && res.code === 6013, `code ${res.code}`);
 }
 
-// retired round slots: only an idle one closes, only for the admin, and its rent goes back
-function roundSlot(slot, status, players = 0) {
-  const d = Buffer.alloc(2640);
-  d[2632] = slot; d[2633] = status; d[2635] = players;
-  svm.setAccount(roundSlotPda(slot), { lamports: 14_061_440, data: d, owner: PROGRAM_ID, executable: false });
-}
-roundSlot(0, 5); roundSlot(1, 3); roundSlot(2, 2, 3); roundSlot(3, 2, 0);
-let cr = send([ix.closeRoundSlot(player.publicKey, 0)], [player]);
-ok('a player cannot close a round slot (Unauthorized 6000)', !cr.ok && cr.code === 6000, `code ${cr.code}`);
-cr = send([ix.closeRoundSlot(admin.publicKey, 1)], [admin]);
-ok('a live round slot is not closed (SlotBusy 6018)', !cr.ok && cr.code === 6018, `code ${cr.code}`);
-cr = send([ix.closeRoundSlot(admin.publicKey, 2)], [admin]);
-ok('an open round with players is not closed (SlotBusy 6018)', !cr.ok && cr.code === 6018, `code ${cr.code}`);
-cr = send([ix.closeRoundSlot(admin.publicKey, 3)], [admin]);
-ok('an open round nobody joined closes', cr.ok, cr.logs.slice(-2).join(' '));
-const before = svm.getBalance(admin.publicKey);
-cr = send([ix.closeRoundSlot(admin.publicKey, 0)], [admin]);
-const gone = svm.getAccount(roundSlotPda(0));
-ok('a settled round slot closes and its rent goes to the admin', cr.ok && (!gone || gone.lamports === 0) && svm.getBalance(admin.publicKey) > before, cr.logs.slice(-2).join(' '));
+// (the retired round slots were all closed on devnet; `close_round_slot` left the program with the setup instructions)
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
