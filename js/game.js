@@ -186,6 +186,7 @@ function renderBalance(v, bump) {
   renderGo();
 }
 api.onBalance(v => renderBalance(v, true));
+api.onNotice(m => toast(m));
 faucetBtn.onclick = async () => {
   if (!(await connect(true))) return;
   try { await api.faucet(); toast('Test balance topped up to 1,000 tUSDC'); } catch (e) { toast(e.message); }
@@ -250,17 +251,18 @@ function opensIn(id) {
 // markets outside their trading hours: stale feed, no new climbs
 function renderClosed() {
   for (const [id, c] of Object.entries(chip)) {
-    const open = api.marketOpen(id);
-    c.b.classList.toggle('is-closed', !open); c.k.textContent = open ? c.kind : 'Closed';
+    const open = api.marketOpen(id), waking = !open && api.marketWaking(id);
+    c.b.classList.toggle('is-closed', !open && !waking); c.b.classList.toggle('is-waking', waking);
+    c.k.textContent = open ? c.kind : waking ? 'Live price…' : 'Closed';
   }
 }
 function renderGo() {
   if (screen !== 'lobby') return;
   const go = $('#go'), meta = $('#goMeta'), bal = api.balance();
-  const open = api.marketOpen(C.asset);
+  const open = api.marketOpen(C.asset), waking = !open && api.marketWaking(C.asset);
   go.disabled = busy || !open;
-  go.textContent = busy ? 'Starting…' : !open ? 'Market closed' : !api.account() ? 'Connect to climb' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
-  meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x with ${money(C.stake * 3)} borrowed from the Sirocco Reserve` : `${byId[C.asset].ticker} is outside its trading hours${opensIn(C.asset)}. Pick an open market.`;
+  go.textContent = busy ? 'Starting…' : waking ? 'Fetching live price…' : !open ? 'Market closed' : !api.account() ? 'Connect to climb' : bal < C.stake ? 'Get test tokens' : 'Start climbing';
+  meta.textContent = open ? `${C.stake} tUSDC on ${byId[C.asset].ticker} ${C.side}, up to 4x with ${money(C.stake * 3)} borrowed from the Sirocco Reserve` : waking ? `${byId[C.asset].ticker} trades 24/7: its live price is on its way to the rollup.` : `${byId[C.asset].ticker} is outside its trading hours${opensIn(C.asset)}. Pick an open market.`;
 }
 $('#go').onclick = async () => {
   if (busy) return;
@@ -368,7 +370,9 @@ function hudFrame(dt) {
 async function cash() {
   if (screen !== 'game' || !run || ended) return;
   $('#cash').disabled = true;
+  const slow = setTimeout(() => { if (!ended) toast('Cashing out on the rollup…'); }, 3500);
   try { await api.cashOut(run.id); } catch (e) { toast(e.message); $('#cash').disabled = false; }
+  finally { clearTimeout(slow); }
 }
 $('#cash').onclick = cash;
 addEventListener('keydown', e => {
