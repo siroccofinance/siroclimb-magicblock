@@ -1,10 +1,9 @@
 # Demo script (pitch video, about 3 minutes)
 
 Before recording: `npm run dev` (or the hosted site), a fresh browser profile, an
-open market (stocks: Sun 20:00 to Fri 20:00 New York, closed on Thanksgiving
-until 20:00 and from 17:00 on the 27th; gold Sun 18:00 to Fri 17:00 with a
-daily hour off at 17:00). The lobby shows a
-closed market as "Closed" with when it opens. Sound on.
+open market (the xStocks are open 24/7; gold Sun 18:00 to Fri 17:00 New York
+with a daily hour off at 17:00). The lobby shows a closed market as "Closed"
+with when it opens. Sound on.
 
 ## 1. Hook (0:00 to 0:20)
 
@@ -32,9 +31,9 @@ The belt brakes, the coin starts climbing. Point at the leverage gauge (1x, 1.5x
 the price and the sparkline (already full: it is read back from the rollup's own
 price updates).
 
-> "Markets keep their real trading hours, on chain: a closed market's frozen
-> price cannot start a climb. This climb is not in my browser. My run account was delegated to a MagicBlock
-> Ephemeral Rollup: the entry is MagicBlock's real-time Pyth price for Tesla, and a
+> "xStocks trade around the clock, and so does the game: their live 24/7 price
+> is relayed into the rollup, nights and weekends. This climb is not in my browser. My run account was delegated to a MagicBlock
+> Ephemeral Rollup: the entry is Tesla's live xStock price on the rollup, and a
 > crank ticks the climb on chain every half second: leverage steps, value, the bust.
 > All of that is free and instant."
 
@@ -63,8 +62,9 @@ On the result screen, click the **Verify** links: stake + delegate (Solana), beg
 
 **Play again**, pick **GMEx**, **Short**, **50**. Ride it a little longer.
 
-> "Five markets, all read the same way: MagicBlock's Pyth Lazer price accounts on
-> the rollup, with the US trading sessions enforced by the program itself. Every
+> "Five markets, all priced on the rollup: the four xStocks from their own 24/7
+> market through the program's relay, gold from MagicBlock's Pyth feed, with its
+> trading sessions enforced by the program itself. Every
 > step of a climb is permissionless: if I close the tab, any browser finishes and
 > settles it."
 
