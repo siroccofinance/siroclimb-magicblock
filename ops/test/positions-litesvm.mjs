@@ -12,7 +12,7 @@ import { MARKETS, PROGRAM_ID, TOKEN_PROGRAM_ID, USDC_MINT, VAULT } from '../../j
 import { ata22Of, ataOf, configPda, deskPda, escrowOf, lendPda, runPda } from '../../js/chain/pdas.js';
 import { createAtaIdempotent, ix } from '../../js/chain/ix.js';
 import { decodeDesk, decodeRun, discriminator } from '../../js/chain/codec.js';
-import { bal22, mint22, pushQuotes, setupDesk, tokenAccount, writeConfig, writeReserve } from './desk-fixture.mjs';
+import { bal22, mint22, pushQuotes, setupDesk, tokenAccount } from './desk-fixture.mjs';
 
 const svm = new LiteSVM();
 svm.addProgramFromFile(PROGRAM_ID, new URL('../../chain/target/deploy/siroclimb.so', import.meta.url).pathname);
@@ -61,9 +61,10 @@ const admin = Keypair.generate();
 svm.airdrop(admin.publicKey, BigInt(10 * LAMPORTS_PER_SOL));
 let t = Math.floor(Date.parse('2026-12-05T15:00:00Z') / 1000); // a Saturday: every market open
 at(t);
-writeConfig(svm, admin.publicKey);
-writeReserve(svm, admin.publicKey, 1_000_000n * U, t);
-let r = { ok: true, logs: [] };
+let r = send([ix.initialize(admin.publicKey, USDC_MINT, VAULT)], [admin]);
+ok('initialize', r.ok, r.logs.slice(-2).join(' '));
+r = send([ix.initReserve(admin.publicKey)], [admin]);
+ok('reserve opens', r.ok, r.logs.slice(-2).join(' '));
 desk = setupDesk(svm, send, admin, { inventory: 10n ** 14n, usdc: 10_000_000n * U });
 ok('desk opens with the five market tokens', desk.ok && deskState().mints.every((m, a) => m.equals(MARKETS[a].mintKey)), desk.logs.slice(-2).join(' '));
 at(++t);

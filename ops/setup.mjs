@@ -1,10 +1,12 @@
 // One-time devnet setup (idempotent): test-USDC mint (authority = config PDA),
 // house vault (token account owned by config), config, the bankroll and the
-// Sirocco Reserve opened on it (the deployer is its first lender).
+// Sirocco Reserve opened on it (the deployer is its first lender), the relay
+// account of every market (delegated to the rollup), then the Sirocco desk.
 // Writes js/chain/deployment.js for the front and the scripts.
-// NOTE: the one-time setup instructions (initialize, init_reserve, init_relay, delegate_relay, init_desk,
-// set_desk, fund_house, close_round_slot) ran on devnet and were removed from the program on 25 Nov 2026
-// to keep its binary small. A new deployment needs the program built from commit 13a9760 for its setup.
+//
+// A fresh deployment, in order: npm run chain:deploy, npm run mirrors (the
+// market token mints), npm run setup (this script: it opens and stocks the desk
+// at the end, see ops/desk.mjs).
 import fs from 'fs';
 import { Keypair, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
@@ -86,4 +88,6 @@ if (!(await conn.getAccountInfo(reservePda()))) {
     console.log('relay', MARKETS[a].id, relayPda(a).toBase58(), 'relayer', relayer.publicKey.toBase58(), sig);
   }
 }
+// the Sirocco desk: init_desk, the desk's and the lending book's token accounts, inventories, the tUSDC float
+await import('./desk.mjs');
 console.log('setup done');

@@ -118,6 +118,73 @@ pub mod siroclimb {
 
     // ================================================================ base layer
 
+    /// Config PDA. The test-USDC mint (mint authority = config) and the vault
+    /// (a token account owned by config: the house bankroll) are
+    /// created by the client in the same transaction; this checks and records them.
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        let config_key = ctx.accounts.config.key();
+        check_mint(&ctx.accounts.usdc_mint, &config_key)?;
+        token_balance(&ctx.accounts.vault, &ctx.accounts.usdc_mint.key(), Some(&config_key))?;
+        let c = &mut ctx.accounts.config;
+        c.admin = ctx.accounts.admin.key();
+        c.usdc_mint = ctx.accounts.usdc_mint.key();
+        c.vault = ctx.accounts.vault.key();
+        c.bump = ctx.bumps.config;
+        Ok(())
+    }
+
+    /// Mint test USDC into the house vault (the bankroll solo climbs are paid from).
+    pub fn fund_house(ctx: Context<FundHouse>, amount: u64) -> Result<()> {
+        let seeds: &[&[u8]] = &[CONFIG_SEED, &[ctx.accounts.config.bump]];
+        token_mint_to(
+            &ctx.accounts.token_program,
+            &ctx.accounts.usdc_mint,
+            &ctx.accounts.vault,
+            &ctx.accounts.config.to_account_info(),
+            amount,
+            seeds,
+        )
+    }
+
+    /// Close a round slot left from the retired round mode and hand its rent
+    /// back to the admin. Only an idle slot on Solana: free, settled, or
+    /// opened with nobody seated.
+    pub fn close_round_slot(ctx: Context<CloseRoundSlot>, slot: u8) -> Result<()> {
+        let r = &ctx.accounts.round;
+        require_keys_eq!(*r.owner, crate::ID, ClimbError::BadRound);
+        {
+            let data = r.try_borrow_data()?;
+            require!(data.len() > ROUND_STATUS_AT, ClimbError::BadRound);
+            require!(data[ROUND_STATUS_AT - 1] == slot, ClimbError::BadRound);
+            // free or settled, or opened / drawing with nobody seated (no pot)
+            let (status, players) = (data[ROUND_STATUS_AT], data[ROUND_STATUS_AT + 2]);
+            require!(status == 0 || status == 5 || (status <= 2 && players == 0), ClimbError::SlotBusy);
+        }
+        let admin = ctx.accounts.admin.to_account_info();
+        **admin.try_borrow_mut_lamports()? += r.lamports();
+        **r.try_borrow_mut_lamports()? = 0;
+        r.try_borrow_mut_data()?.fill(0);
+        Ok(())
+    }
+
+    /// Open the Sirocco Reserve. The tUSDC already in the vault (the house
+    /// bankroll) becomes the admin's lender position, one share per tUSDC: the
+    /// deployer is the first lender.
+    pub fn init_reserve(ctx: Context<InitReserve>) -> Result<()> {
+        let vault = token_balance(&ctx.accounts.vault, &ctx.accounts.config.usdc_mint, Some(&ctx.accounts.config.key()))?;
+        let rs = &mut ctx.accounts.reserve;
+        rs.shares = vault;
+        rs.deposits = vault;
+        rs.created_ts = Clock::get()?.unix_timestamp;
+        rs.bump = ctx.bumps.reserve;
+        let l = &mut ctx.accounts.lender;
+        l.owner = ctx.accounts.admin.key();
+        l.shares = vault;
+        l.deposited = vault;
+        l.bump = ctx.bumps.lender;
+        msg!("reserve opened with {} tUSDC from the admin", vault);
+        Ok(())
+    }
 
     /// Lend tUSDC to the reserve for shares at the current share price.
     /// Signed by the wallet, or by its session key (the wallet's approved spender).
@@ -498,6 +565,54 @@ pub mod siroclimb {
         Ok(())
     }
 
+    /// Create the relay price account of an xStock market, naming the key
+    /// allowed to push its prices.
+    pub fn init_relay(ctx: Context<InitRelay>, market: u8, exponent: i32, relayer: Pubkey) -> Result<()> {
+        require!(is_relay(market), ClimbError::BadAsset);
+        let f = &mut ctx.accounts.relay;
+        f.market = market;
+        f.exponent = exponent;
+        f.relayer = relayer;
+        f.bump = ctx.bumps.relay;
+        Ok(())
+    }
+
+    /// Hand a relay account to the rollup, where prices are pushed for free.
+    pub fn delegate_relay(ctx: Context<DelegateRelay>, market: u8) -> Result<()> {
+        require!(is_relay(market), ClimbError::BadAsset);
+        ctx.accounts.delegate_relay(
+            &ctx.accounts.admin,
+            &[RELAY_SEED, &[market]],
+            DelegateConfig { validator: ctx.remaining_accounts.first().map(|v| v.key()), ..Default::default() },
+        )?;
+        Ok(())
+    }
+
+    /// Open the Sirocco desk (spread, the market tokens) and the Solana quotes its opening fills read.
+    pub fn init_desk(ctx: Context<InitDesk>, spread_bps: u16, mints: [Pubkey; ASSETS], decimals: [u8; ASSETS], relayer: Pubkey) -> Result<()> {
+        require!(spread_bps < 1_000, ClimbError::BadPrice);
+        let d = &mut ctx.accounts.desk;
+        d.admin = ctx.accounts.admin.key();
+        d.spread_bps = spread_bps;
+        d.mints = mints;
+        d.decimals = decimals;
+        d.bump = ctx.bumps.desk;
+        let q = &mut ctx.accounts.quotes;
+        q.relayer = relayer;
+        q.bump = ctx.bumps.quotes;
+        Ok(())
+    }
+
+    /// Change the desk's spread or a market's token (admin).
+    pub fn set_desk(ctx: Context<SetDesk>, spread_bps: u16, mints: [Pubkey; ASSETS], decimals: [u8; ASSETS]) -> Result<()> {
+        require!(spread_bps < 1_000, ClimbError::BadPrice);
+        let d = &mut ctx.accounts.desk;
+        d.spread_bps = spread_bps;
+        d.mints = mints;
+        d.decimals = decimals;
+        Ok(())
+    }
+
     /// The relay pushes its prices on Solana too, for the opening fills (same raw units as the rollup).
     pub fn push_quotes(ctx: Context<PushQuotes>, prices: [u64; ASSETS], ts: i64) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
@@ -874,7 +989,30 @@ pub struct RelayFeed {
     pub bump: u8,
 }
 
+#[derive(Accounts)]
+#[instruction(market: u8)]
+pub struct InitRelay<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(init, payer = admin, space = 8 + RelayFeed::INIT_SPACE, seeds = [RELAY_SEED, &[market]], bump)]
+    pub relay: Account<'info, RelayFeed>,
+    pub system_program: Program<'info, System>,
+}
 
+#[delegate]
+#[derive(Accounts)]
+#[instruction(market: u8)]
+pub struct DelegateRelay<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the relay PDA, handed to the delegation program.
+    #[account(mut, del, seeds = [RELAY_SEED, &[market]], bump)]
+    pub relay: UncheckedAccount<'info>,
+}
 
 #[derive(Accounts)]
 pub struct PushPrice<'info> {
@@ -890,9 +1028,63 @@ pub struct FaucetClaim {
     pub last_ts: i64,
 }
 
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(init, payer = admin, space = 8 + Config::INIT_SPACE, seeds = [CONFIG_SEED], bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: SPL mint whose mint authority is `config`; checked in the handler.
+    pub usdc_mint: UncheckedAccount<'info>,
+    /// CHECK: token account of `usdc_mint` owned by `config`; checked in the handler.
+    pub vault: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
 
+#[derive(Accounts)]
+pub struct FundHouse<'info> {
+    #[account(address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the config's mint.
+    #[account(mut, address = config.usdc_mint @ ClimbError::BadMint)]
+    pub usdc_mint: UncheckedAccount<'info>,
+    /// CHECK: the config's vault.
+    #[account(mut, address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    /// CHECK: address-checked SPL Token program.
+    #[account(address = TOKEN_PROGRAM_ID)]
+    pub token_program: UncheckedAccount<'info>,
+}
 
+#[derive(Accounts)]
+#[instruction(slot: u8)]
+pub struct CloseRoundSlot<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    /// CHECK: the retired round slot PDA, owner and status checked in the handler.
+    #[account(mut, seeds = [ROUND_SEED, &[slot]], bump)]
+    pub round: UncheckedAccount<'info>,
+}
 
+#[derive(Accounts)]
+pub struct InitReserve<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(init, payer = admin, space = 8 + Reserve::INIT_SPACE, seeds = [RESERVE_SEED], bump)]
+    pub reserve: Box<Account<'info, Reserve>>,
+    #[account(init, payer = admin, space = 8 + Lender::INIT_SPACE, seeds = [LENDER_SEED, admin.key().as_ref()], bump)]
+    pub lender: Box<Account<'info, Lender>>,
+    /// CHECK: the config's vault.
+    #[account(address = config.vault @ ClimbError::BadVault)]
+    pub vault: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
@@ -1129,7 +1321,26 @@ pub struct OpenPosition<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct InitDesk<'info> {
+    #[account(mut, address = config.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(init, payer = admin, space = 8 + Desk::INIT_SPACE, seeds = [DESK_SEED], bump)]
+    pub desk: Box<Account<'info, Desk>>,
+    #[account(init, payer = admin, space = 8 + Quotes::INIT_SPACE, seeds = [QUOTES_SEED], bump)]
+    pub quotes: Box<Account<'info, Quotes>>,
+    pub system_program: Program<'info, System>,
+}
 
+#[derive(Accounts)]
+pub struct SetDesk<'info> {
+    #[account(address = desk.admin @ ClimbError::Unauthorized)]
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [DESK_SEED], bump = desk.bump)]
+    pub desk: Box<Account<'info, Desk>>,
+}
 
 #[derive(Accounts)]
 pub struct PushQuotes<'info> {
