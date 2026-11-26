@@ -1,5 +1,7 @@
 // Share cards: a climb's result, read from Solana, signed into a short token, drawn as a 1200 x 630 PNG.
-//   token  = base64url(JSON of the settled climb) + "." + HMAC-SHA256(SHARE_SECRET) (first 16 bytes, base64url)
+//   token  = base64url(packed card + the first 6 bytes of its HMAC-SHA256(SHARE_SECRET)): about 30 characters
+//   packed = market, side, status, top step and seconds in two bytes; stake, P&L (cents) and return (bps) as
+//            varints; the player's name. Tokens of the first format (base64url JSON "." 16-byte HMAC) still verify.
 // Only /api/share mints tokens, and only from a run account settled on chain and the matching record of the
 // player's profile, so a card cannot claim a result nobody played. /s/<token> and /api/card verify the signature.
 import crypto from 'crypto';
@@ -30,13 +32,42 @@ function secret() {
 }
 const mac = (body) => b64u(crypto.createHmac('sha256', secret()).update(body).digest().subarray(0, 16));
 
-export function sign(card) { const body = b64u(JSON.stringify(card)); return `${body}.${mac(body)}`; }
-export function verify(token) {
+const MAC6 = (buf) => crypto.createHmac('sha256', secret()).update(buf).digest().subarray(0, 6);
+const zz = (v) => (v < 0 ? -2 * v - 1 : 2 * v), unzz = (u) => (u % 2 ? -(u + 1) / 2 : u / 2);
+function varint(out, u) { u = Math.max(0, Math.round(u)); do { let b = u % 128; u = Math.floor(u / 128); out.push(u ? b | 128 : b); } while (u); }
+function readVarint(buf, at) { let u = 0, mul = 1, b; do { if (at.i >= buf.length || mul > 2 ** 42) throw new Error('bad'); b = buf[at.i++]; u += (b & 127) * mul; mul *= 128; } while (b & 128); return u; }
+
+export function sign(card) {
+  const st = Math.min(3, Math.max(0, (card.st || RUN.CASHED) - RUN.CASHED));
+  const head = ((card.a & 7) << 12) | ((card.s & 1) << 11) | (st << 9) | ((card.m & 7) << 6) | Math.min(63, Math.max(0, card.d | 0));
+  const out = [head >> 8, head & 255];
+  varint(out, card.k / 1e4); varint(out, zz(Math.round(card.p / 1e4))); varint(out, zz(card.b | 0));
+  const name = Buffer.from(String(card.n || '').slice(0, 16), 'utf8').subarray(0, 32);
+  out.push(...name);
+  const body = Buffer.from(out);
+  return b64u(Buffer.concat([body, MAC6(body)]));
+}
+function verifyLegacy(token) {
   const [body, sig] = String(token || '').split('.');
   if (!body || !sig || body.length > 600) return null;
   const want = Buffer.from(mac(body)), got = Buffer.from(sig);
   if (want.length !== got.length || !crypto.timingSafeEqual(want, got)) return null;
   try { return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { return null; }
+}
+export function verify(token) {
+  token = String(token || '');
+  if (token.includes('.')) return verifyLegacy(token);
+  if (!/^[\w-]{12,80}$/.test(token)) return null;
+  const buf = Buffer.from(token, 'base64url');
+  if (buf.length < 11) return null;
+  const body = buf.subarray(0, buf.length - 6), got = buf.subarray(buf.length - 6);
+  if (!crypto.timingSafeEqual(MAC6(body), got)) return null;
+  try {
+    const head = (body[0] << 8) | body[1], at = { i: 2 };
+    const k = readVarint(body, at) * 1e4, p = unzz(readVarint(body, at)) * 1e4, b = unzz(readVarint(body, at));
+    const n = body.subarray(at.i).toString('utf8');
+    return { v: 2, n, a: (head >> 12) & 7, s: (head >> 11) & 1, st: RUN.CASHED + ((head >> 9) & 3), m: (head >> 6) & 7, d: head & 63, k, p, b, e: 0, x: 0 };
+  } catch { return null; }
 }
 
 /// The player's last settled climb, from the run account and the profile's record of it.
