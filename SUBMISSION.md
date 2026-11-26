@@ -23,7 +23,7 @@ Before submitting:
 
 ## Description (short)
 
-Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPLx, GMEx) and tokenized gold (XAUt). Go long or short: the coin rolls up and down a staircase that follows the live price, leverage steps from 1x to 4x every 6 seconds, and you cash out whenever you like. Your stake is the most you can lose. Every climb is a real position: long, it buys the market's token (real tokens sit in the climb's escrow); short, it borrows and sells it, through the program's own swap venue (the Sirocco desk). Leverage is a real loan from the Sirocco Reserve, a tUSDC lending pool anyone can lend to and earn from. The game magnifies the moves ("moves ×90"), and the result splits the tokens' P&L from the game's boost. Every climb runs fully on chain on a MagicBlock Ephemeral Rollup: 120 ticks a minute, zero fees, one wallet approval, settled on Solana. Every market trades 24/7, and so does the game.
+Siroclimb is a one-minute leverage climb on tokenized stocks (TSLAx, NVDAx, AAPLx, MSTRx) and tokenized gold (XAUt). Go long or short: the coin rolls up and down a staircase that follows the live price, leverage steps from 1x to 4x every 6 seconds, and you cash out whenever you like. Your stake is the most you can lose. Every climb is a real position: long, it buys the market's token (real tokens sit in the climb's escrow); short, it borrows and sells it, through the program's own swap venue (the Sirocco desk). Leverage is a real loan from the Sirocco Reserve, a tUSDC lending pool anyone can lend to and earn from. The game magnifies the moves ("moves ×90"), and the result splits the tokens' P&L from the game's boost. Every climb runs fully on chain on a MagicBlock Ephemeral Rollup: 120 ticks a minute, zero fees, one wallet approval, settled on Solana. Every market trades 24/7, and so does the game.
 
 ## How MagicBlock is used
 
@@ -72,7 +72,7 @@ Click a **Verify** link.
 
 > Siroclimb 🪙 a one-minute leverage climb on tokenized stocks.
 >
-> Long or short TSLAx, NVDAx, AAPLx, GMEx or gold, 24/7, 1x to 4x, cash out anytime. Real tokens bought or borrowed, with leverage from a lending pool.
+> Long or short TSLAx, NVDAx, AAPLx, MSTRx or gold, 24/7, 1x to 4x, cash out anytime. Real tokens bought or borrowed, with leverage from a lending pool.
 >
 > Fully on-chain on a @magicblock Ephemeral Rollup: 120 ticks a minute, zero fees, settled on Solana. Built for Solana Blitz v10.
 >

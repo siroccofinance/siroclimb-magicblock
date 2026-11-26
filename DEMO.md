@@ -8,7 +8,7 @@ every market is open 24/7. Sound on.
 Landing film, then **Start playing**.
 
 > "Siroclimb is a one-minute leverage climb on real-world assets: Tesla, NVIDIA,
-> Apple and GameStop xStocks, and gold. Every step adds leverage, up to 4x.
+> Apple and MicroStrategy xStocks, and gold. Every step adds leverage, up to 4x.
 > Cash out whenever you want; your stake is the most you can lose."
 
 ## 2. One approval, then instant (0:20 to 0:50)
@@ -58,7 +58,7 @@ On the result screen, click the **Verify** links: stake + delegate (Solana), beg
 
 ## 5. Another market, short (2:00 to 2:40)
 
-**Play again**, pick **GMEx**, **Short**, **50**. Ride it a little longer.
+**Play again**, pick **MSTRx**, **Short**, **50**. Ride it a little longer.
 
 > "Five markets, all priced on the rollup from their own 24/7 token market
 > through the program's relay: four xStocks and XAUt for gold. None of them
