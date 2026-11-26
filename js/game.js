@@ -2,7 +2,7 @@
 // The 3D scene is the hero's: in the lobby the belt loops; on start it brakes, the coin's box climbs one level
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
-import { createEscalatorScene } from './sirocco-escalator-scene.js?v=9';
+import { createEscalatorScene } from './sirocco-escalator-scene.js?v=10';
 import { CARD, drawCard, loadLogo, toBlob } from './share-card.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -655,7 +655,8 @@ addEventListener('popstate', () => {
 
 // ── stairs game: the path follows the price. One step = a typical half-second move of this market,
 //    measured from its own recent ticks, so calm and wild markets both climb at a readable pace.
-const lvl = { level: 0, q: 0.0015, entry: 0, sign: 1 };
+const lvl = { level: 0, q: 0.0015, entry: 0, sign: 1, last: 0 };
+if (globalThis.SIROCLIMB_DEBUG) window.__lvl = lvl;
 function stepSize(assetId) {
   const h = api.history(assetId, 60); if (h.length < 10) return 0.0015;
   const t0 = h[0].ts, t1 = h[h.length - 1].ts, px = []; let j = 0;
@@ -664,14 +665,30 @@ function stepSize(assetId) {
   const m = r.reduce((a, b) => a + b, 0) / r.length, sd = Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / r.length);
   return Math.max(1e-5, sd * 1.4);
 }
+// Every price change is a step, however small: up when it goes the player's way, down when it does not,
+// one step for a small move, two or three for a large one (in this market's typical moves, soft-capped).
+// Purely visual: the climb's value, the bust and the payout come from the chain.
+/// The typical size of one price change of this market (median of its recent non-zero moves).
+function typicalMove(assetId) {
+  const h = api.history(assetId, 90), r = [];
+  for (let i = 1; i < h.length; i++) if (h[i].price !== h[i - 1].price) r.push(Math.abs(Math.log(h[i].price / h[i - 1].price)));
+  if (r.length < 5) return 0;
+  r.sort((a, b) => a - b);
+  return r[Math.floor(r.length / 2)];
+}
 function levelFrom(price) {
-  if (!lvl.entry) return;
-  const x = lvl.sign * Math.log(price / lvl.entry) / lvl.q;      // favourable move, in steps
-  if (Math.abs(x - lvl.level) > 0.65) lvl.level = Math.round(x);  // hysteresis: no flicker on a boundary
+  if (globalThis.SIROCLIMB_DEBUG) (window.__lvlog ||= []).push([Math.round(performance.now() / 100) / 10, price, lvl.last]);
+  if (!lvl.entry || !(price > 0)) return;
+  if (!lvl.last) { lvl.last = price; return; }
+  if (price === lvl.last) return;
+  // size in this market's typical moves: an ordinary tick is one step, two or three for an unusual one
+  const r = lvl.sign * Math.log(price / lvl.last), size = Math.abs(r) / (lvl.tick || lvl.q);
+  lvl.level += Math.sign(r) * (size >= 4 ? 3 : size >= 2 ? 2 : 1);
+  lvl.last = price;
 }
 function startTrack(r) {
   if (!sc || !G) return;
-  lvl.level = 0; lvl.entry = r.entryPrice; lvl.sign = r.side === 'short' ? -1 : 1; lvl.q = stepSize(r.assetId);
+  lvl.level = 0; lvl.entry = r.entryPrice; lvl.last = r.entryPrice; lvl.sign = r.side === 'short' ? -1 : 1; lvl.q = stepSize(r.assetId); lvl.tick = typicalMove(r.assetId);
   TK = sc.createTrack(G.plan); TK.dangerTo = 0;
   G = null;
   TK.onStep = (n, big) => {
