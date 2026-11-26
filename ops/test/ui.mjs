@@ -13,7 +13,8 @@ const errs = [];
 let shared = false;
 pg.on('pageerror', (e) => { errs.push(e.message); console.log('ERR', e.message); });
 pg.on('console', (c) => { if (c.type() === 'error') { errs.push(c.text()); console.log('CONSOLE', c.text()); } });
-await pg.setViewport({ width: 1440, height: 900 });
+const VW = Number(process.env.VW || 1440), mob = VW < 768;   // VW=390: a phone
+await pg.setViewport({ width: VW, height: mob ? 844 : 900, isMobile: mob, hasTouch: mob, deviceScaleFactor: mob ? 2 : 1 });
 await pg.evaluateOnNewDocument(() => { window.SIROCLIMB_DEBUG = true; });
 pg.on('console', (c) => { if (c.type() === 'log' && c.text().startsWith('[siroclimb]')) console.log('   ', c.text()); });
 await pg.exposeFunction('__toast', (t) => console.log('    toast:', t));
