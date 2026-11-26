@@ -70,7 +70,7 @@ export const ONE_USDC = 1_000_000;
 export const LADDER = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
-export const BOOST = [90, 25, 90, 180, 25];
+export const BOOST = [90, 25, 90, 60, 25];
 /// Markets priced by the program's relay accounts (the others by MagicBlock's oracle).
 export const RELAY_ASSETS = [0, 1, 2, 3, 4];
 /// The Sirocco desk's spread on every fill (basis points), mirrored from the program's Desk account.
