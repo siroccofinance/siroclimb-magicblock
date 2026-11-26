@@ -2,7 +2,7 @@
 // The 3D scene is the hero's: in the lobby the belt loops; on start it brakes, the coin's box climbs one level
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
-import { createEscalatorScene } from './sirocco-escalator-scene.js?v=11';
+import { createEscalatorScene } from './sirocco-escalator-scene.js?v=12';
 import { CARD, drawCard, loadLogo, toBlob } from './share-card.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -679,7 +679,7 @@ addEventListener('popstate', () => {
 // ── stairs game: the path follows the price. One step = a typical half-second move of this market,
 //    measured from its own recent ticks, so calm and wild markets both climb at a readable pace.
 const lvl = { level: 0, q: 0.0015, entry: 0, sign: 1, last: 0 };
-if (globalThis.SIROCLIMB_DEBUG) window.__lvl = lvl;
+if (globalThis.SIROCLIMB_DEBUG) { window.__lvl = lvl; window.__tk = () => TK && { t: TK.t, v: TK.v, dist: TK.dist, y: TK.y, air: TK.air, camY: TK.camY }; }
 function stepSize(assetId) {
   const h = api.history(assetId, 60); if (h.length < 10) return 0.0015;
   const t0 = h[0].ts, t1 = h[h.length - 1].ts, px = []; let j = 0;
@@ -689,12 +689,11 @@ function stepSize(assetId) {
   return Math.max(1e-5, sd * 1.4);
 }
 // Every price change is a step in its own direction (up when it goes the player's way), sized by the move in
-// this market's typical tick: an ordinary tick is one step, twice that four, three times seven, four or more
-// ten (a tall riser, a big jump). Up and back down by the same move draws the same height both ways, so the
-// stairs follow the sparkline's shape. Most prices move by their minimum increment, so a linear scale would
-// make every step alike. Purely visual: the climb's value, the bust and the payout come from the chain.
-const MAX_STEP = 10;
-const stepsFor = (size) => Math.max(1, Math.min(MAX_STEP, Math.round(3 * size - 2)));
+// this market's typical tick, on a log scale: an ordinary tick is one step, twice that three, four times five,
+// eight times or more seven (a tall riser, a big jump; taller walls hid the coin and the camera lagged).
+// Purely visual: the climb's value, the bust and the payout come from the chain.
+const MAX_STEP = 7;
+const stepsFor = (size) => Math.max(1, Math.min(MAX_STEP, 1 + Math.round(2 * Math.log2(Math.max(1, size)))));
 /// The typical size of one price change of this market (median of its recent non-zero moves).
 function typicalMove(assetId) {
   const h = api.history(assetId, 90), r = [];
