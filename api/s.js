@@ -12,7 +12,7 @@ export default function handler(req, res) {
   if (!c) { res.statusCode = 302; res.setHeader('location', play); return res.end(); }
   const d = describe(c), title = `${headline(c)} | Siroclimb`;
   const desc = `${d.eyebrow}: ${d.ret} at up to ${d.top} on ${d.ticker} ${d.side}. Climb live stock and gold prices, fully on-chain on a MagicBlock Ephemeral Rollup.`;
-  const img = `${o}/api/card?t=${t}`, url = `${o}/s/${t}`;
+  const img = `${o}/c/${t}.png`, url = `${o}/s/${t}`;
   res.statusCode = 200;
   res.setHeader('content-type', 'text/html; charset=utf-8');
   res.setHeader('cache-control', 'public, max-age=300, s-maxage=86400');
@@ -24,9 +24,9 @@ export default function handler(req, res) {
 <meta property="og:type" content="website"><meta property="og:site_name" content="Siroclimb">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(img)}">
-<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(headline(c))}">
+<meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${esc(headline(c))}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}">
-<meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">
+<meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}"><meta name="twitter:image:alt" content="${esc(headline(c))}">
 <meta name="theme-color" content="#c2552d">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#c2552d;font:500 16px Inter,system-ui,sans-serif;color:#fff}main{width:min(720px,92vw);text-align:center}img{width:100%;border-radius:16px;box-shadow:0 30px 60px -30px rgba(43,20,10,.7)}a{display:inline-block;margin-top:24px;padding:16px 28px;border-radius:10px;background:linear-gradient(#f2c94c,#e6b25c);color:#2b211a;font-weight:600;text-decoration:none}</style>
 <script>setTimeout(function(){location.replace(${JSON.stringify(play)})},1200)</script>

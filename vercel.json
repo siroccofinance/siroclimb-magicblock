@@ -6,6 +6,10 @@
     {
       "source": "/s/:t",
       "destination": "/api/s?t=:t"
+    },
+    {
+      "source": "/c/:t.png",
+      "destination": "/api/card?t=:t"
     }
   ],
   "functions": {
