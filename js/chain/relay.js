@@ -4,10 +4,12 @@
 // one relay account per market on the rollup that one named key pushes prices
 // into (gasless). Gold is priced as XAUt (Tether Gold), which trades 24/7.
 //
-// Source, all week: the mid of Hyperliquid's trade.xyz perp (xyz:TSLA, NVDA, AAPL,
-// MSTR, GOLD), which trades 24/7 and keeps ticking when the xStock books stand still
-// (US holidays, nights). Kraken's mid (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD,
-// XAUt/USD) only when Hyperliquid fails or has no price for the market (logged). A market may also
+// Source, all week: the microprice of Hyperliquid's trade.xyz perp book (xyz:TSLA,
+// NVDA, AAPL, MSTR, GOLD; top level, size-weighted: it moves with every change of
+// the best bid or ask and their sizes, ten times as often as the mid), which trades
+// 24/7 and keeps ticking when the xStock books stand still. Then Hyperliquid's mid
+// (allMids), then Kraken's (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD, XAUt/USD)
+// when Hyperliquid fails or has no price for the market (logged). A market may also
 // take Jupiter's price of its Solana mint (`source: 'jupiter'`), eased in. The
 // other venue is the sanity check: a price more than 1.5 % away from it (from
 // Kraken's bid-ask range for a Jupiter-priced market) is not pushed, and neither
@@ -43,11 +45,29 @@ async function kraken() {
   }
   return out;
 }
+const hlPost = (body) => fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body), signal: AbortSignal.timeout(1500) }).then((x) => x.json());
+/// Top-of-book microprice: (bid * askSize + ask * bidSize) / (bidSize + askSize).
+export function microprice(book) {
+  const [bids, asks] = (book && book.levels) || [];
+  const b = bids && bids[0], k = asks && asks[0];
+  if (!b || !k) return 0;
+  const bp = Number(b.px), bs = Number(b.sz), ap = Number(k.px), as = Number(k.sz);
+  if (!(bp > 0 && ap >= bp && bs > 0 && as > 0)) return 0;
+  return (bp * as + ap * bs) / (bs + as);
+}
 async function hyperliquid() {
-  const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ type: 'allMids', dex: 'xyz' }), signal: AbortSignal.timeout(1500) }).then((x) => x.json()).catch(() => null);
+  const assets = RELAY_ASSETS.filter((a) => MARKETS[a].hl);
+  const [books, mids] = await Promise.all([
+    Promise.all(assets.map((a) => hlPost({ type: 'l2Book', coin: MARKETS[a].hl }).catch(() => null))),
+    hlPost({ type: 'allMids', dex: 'xyz' }).catch(() => null),
+  ]);
   const out = {};
-  for (const a of RELAY_ASSETS) { const v = r && MARKETS[a].hl ? Number(r[MARKETS[a].hl]) : 0; if (v > 0) out[a] = v; }
+  assets.forEach((a, i) => {
+    const micro = microprice(books[i]), mid = mids ? Number(mids[MARKETS[a].hl]) : 0;
+    if (micro > 0 && !(mid > 0 && Math.abs(micro / mid - 1) > 0.005)) out[a] = { price: micro, src: 'hl-micro' };
+    else if (mid > 0) out[a] = { price: mid, src: 'hl-mid' };
+  });
   return out;
 }
 async function jupiter() {
@@ -68,8 +88,8 @@ export async function fetchQuotes() {
       if (!jq || (kq && (jq < kq.bid * (1 - MAX_GAP) || jq > kq.ask * (1 + MAX_GAP)))) continue;
       price = jq; src = 'jupiter';
     } else {
-      const h = hl[a];
-      if (h && !(jq && Math.abs(h / jq - 1) > HL_GAP)) { price = h; src = 'hl'; }
+      const h = hl[a] && hl[a].price;
+      if (h && !(jq && Math.abs(h / jq - 1) > HL_GAP)) { price = h; src = hl[a].src; }
       else {
         if (!kq || (jq && Math.abs(kq.mid / jq - 1) > MAX_GAP)) continue;
         price = kq.mid; src = 'kraken';
@@ -89,11 +109,12 @@ export async function readRelays(er) {
 /// Push the current prices (one rollup transaction for every market) unless the relays were updated less
 /// than `minGapS` ago. With `base`, also push them on Solana (the quotes positions open at) when those are
 /// older than `quoteGapS`: a Solana transaction, so about every 10 s rather than every second.
+let quotesBusy = false;   // one Solana quotes push at a time from this process
 export async function pushOnce(er, relayer, { minGapS = 1, base = null, quoteGapS = 10 } = {}) {
   const now = Math.floor(Date.now() / 1000);
   const [cur, qa] = await Promise.all([readRelays(er), base ? base.getAccountInfo(quotesPda()).catch(() => null) : null]);
   const oldest = Math.min(...RELAY_ASSETS.map((a) => (cur[a] ? cur[a].ts : 0)));
-  const quotesDue = !!(base && qa && now - decodeQuotes(qa.data).ts >= quoteGapS);
+  const quotesDue = !!(base && qa && now - decodeQuotes(qa.data).ts >= quoteGapS) && !quotesBusy;
   if (now - oldest < minGapS && !quotesDue) return { skipped: true };
   const q = await fetchQuotes();
   // Jupiter's price hops between routes (a few tenths of a percent): ease it from
@@ -112,7 +133,9 @@ export async function pushOnce(er, relayer, { minGapS = 1, base = null, quoteGap
   if (quotesDue) {
     // a market whose source did not answer keeps its last quote (0 = unchanged on chain)
     const prices = MARKETS.map((m, a) => (q[a] ? BigInt(q[a].raw) : 0n));
-    jobs.push(send(base, [ix.pushQuotes(relayer.publicKey, prices, BigInt(now))], [relayer], { label: 'push quotes', attempts: 1, tries: 40 }).then((sig) => { out.quotes = sig; }));
+    quotesBusy = true;
+    jobs.push(send(base, [ix.pushQuotes(relayer.publicKey, prices, BigInt(now))], [relayer], { label: 'push quotes', attempts: 1, tries: 40 })
+      .then((sig) => { out.quotes = sig; }).finally(() => { quotesBusy = false; }));
   }
   await Promise.all(jobs);
   if (!out.sig && !out.quotes) return { skipped: true, reason: 'no quotes' };
