@@ -489,7 +489,7 @@ function askLink(r) {
   link = { r, url: null, pending: api.shareCard(null, r).catch(() => null) };
   const l = link; l.pending.then(u => { l.url = u; });
 }
-const PLAYED_ON = 'Fully on-chain on a @magicblock Ephemeral Rollup: 120 ticks a minute, zero fees, settled on Solana.';
+const PLAYED_ON = 'Fully on-chain on a @magicblock Ephemeral Rollup: live prices every few hundred ms, zero fees, settled on Solana.';
 function shareText() {
   const a = byId[run.assetId], r = ended, side = run.side === 'short' ? 'short' : 'long', at = `${levTxt(r.maxLeverage)} ${side} on ${a.ticker}`;
   const head = r.status === 'busted' ? `My coin fell off the stairs at ${at} 🪙 Rematch incoming.`
@@ -509,6 +509,9 @@ function showTip(copied, href) {
   t.hidden = false; requestAnimationFrame(() => t.classList.add('is-on'));
   clearTimeout(tipT); tipT = setTimeout(hideTip, 12000);
 }
+// a new tab for X, this one stays on the game: window.open with 'noopener' always returns null,
+// so it can't tell a blocked popup; open it plain, cut the opener by hand, and only fall back to this tab when blocked
+function openTab(href) { const w = window.open(href, '_blank'); if (w) { try { w.opener = null; } catch {} } else location.href = href; }
 function hideTip() { const t = $('#sharetip'); t.classList.remove('is-on'); clearTimeout(tipT); tipT = setTimeout(() => { t.hidden = true; }, 300); }
 $('#tipClose').onclick = hideTip;
 $('#share').onclick = async () => {
@@ -533,7 +536,7 @@ $('#share').onclick = async () => {
       u = await Promise.race([link.pending, new Promise(r => setTimeout(() => r(null), 9000))]);
       btn.classList.remove('is-busy');
     }
-    if (u) { const href = intent(text, u); if (w) { w.opener = null; w.location.href = href; } else if (!window.open(href, '_blank', 'noopener')) location.href = href; return; }
+    if (u) { const href = intent(text, u); if (w) { w.opener = null; w.location.href = href; } else openTab(href); return; }
     if (w) w.close();
   }
   const href = intent(text, url);
