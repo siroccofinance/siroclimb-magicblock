@@ -535,3 +535,19 @@ body[data-side="short"] .sideglow { --g: var(--short); }
   .stats .is-minor { display: none; }
   .result .proof { font-size: 12px; line-height: 1.7; }
 }
+
+/* phone header: the actions take the room left by the mark and shrink
+   instead of pushing the wallet off the screen, whatever the label is */
+@media (max-width: 767px) {
+  .top { gap: 8px; }
+  .top__actions { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .wallet { min-width: 0; flex: 0 1 auto; }
+  .wallet__btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .balance { flex: none; }
+}
+@media (max-width: 400px) {
+  .top__actions .icon { width: 30px; }
+  .top__actions .icon svg { width: 20px; height: 20px; }
+  .balance { padding-left: 8px; }
+  .wallet__btn { padding: 0 8px; }
+}
