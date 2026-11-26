@@ -24,7 +24,8 @@ const sgn = v => (v < -0.0049 ? MINUS : '+');
 const signed = v => sgn(v) + nf.format(Math.abs(v));
 const pct = v => sgn(v) + Math.abs(v).toFixed(2) + '%';
 const small = v => (v > 0 && v < 0.01 ? v.toFixed(4) : v.toFixed(3));   // borrow costs are cents
-const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));
+const price = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(3) : p.toFixed(4));   // three decimals: the microprice's small moves show
+const price2 = p => (p >= 1000 ? nf.format(p) : p >= 10 ? p.toFixed(2) : p.toFixed(4));  // the lobby cards: two, so the row fits
 const tokens = v => (v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toPrecision(4));
 const levTxt = x => (x % 1 ? x.toFixed(1) : String(x)) + 'x';
 const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -210,7 +211,7 @@ for (const a of assets) {
 const ref24 = {};
 function drawChip(id) {
   const c = chip[id], p = c.last, r = ref24[id];
-  if (p > 0) c.p.textContent = price(p);
+  if (p > 0) c.p.textContent = price2(p);
   if (!(p > 0 && r > 0)) { c.c.textContent = ''; c.c.className = 'c'; return; }
   const ch = (p / r - 1) * 100;
   c.c.innerHTML = `${sgn(ch)}${Math.abs(ch).toFixed(2)}%<small style="opacity:.6;font-size:.75em;margin-left:.2em">24h</small>`;

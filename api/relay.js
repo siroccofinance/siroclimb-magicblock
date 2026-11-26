@@ -21,13 +21,19 @@ export default async function handler(req, res) {
       relayer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(process.env.RELAYER_SECRET_KEY)));
     }
     if (/vercel-cron/.test(String(req.headers['user-agent'] || ''))) {
-      const end = Date.now() + 55000; let n = 0, err = 0;
+      // one push a second on the clock, not after the previous one lands (at most two in flight;
+      // a late one carrying an older timestamp is refused by the program, never written over a newer price)
+      const end = Date.now() + 55000, er = erConnection(), base = baseConnection(), busy = new Set(); let n = 0, err = 0;
       while (Date.now() < end) {
         const t = Date.now();
-        await pushOnce(erConnection(), relayer, { minGapS: 1, base: baseConnection() }).then((o) => { if (o.sig) n++; }).catch(() => { err++; });
+        if (busy.size < 2) {
+          const p = pushOnce(er, relayer, { minGapS: 0, base }).then((o) => { if (o.sig) n++; }).catch(() => { err++; }).finally(() => busy.delete(p));
+          busy.add(p);
+        }
         last = Date.now();
         await new Promise((r) => setTimeout(r, Math.max(0, 1000 - (Date.now() - t))));
       }
+      await Promise.all(busy);
       res.statusCode = 200; return res.end(JSON.stringify({ cron: true, pushes: n, errors: err }));
     }
     if (Date.now() - last < 700) { res.statusCode = 200; return res.end(JSON.stringify({ skipped: true })); }
