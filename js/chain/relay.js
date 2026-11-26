@@ -109,6 +109,18 @@ export async function readRelays(er) {
 /// Push the current prices (one rollup transaction for every market) unless the relays were updated less
 /// than `minGapS` ago. With `base`, also push them on Solana (the quotes positions open at) when those are
 /// older than `quoteGapS`: a Solana transaction, so about every 10 s rather than every second.
+/// Push the given prices ({ asset: raw }) into the relay accounts on the rollup, one transaction.
+export function pushRelayPrices(er, relayer, raws, ts) {
+  const ixs = Object.entries(raws).map(([a, raw]) => ix.pushPrice(relayer.publicKey, Number(a), BigInt(raw), BigInt(ts)));
+  return ixs.length ? send(er, ixs, [relayer], { label: 'push prices', attempts: 1, tries: 20 }) : Promise.resolve(null);
+}
+/// Push the given prices ({ asset: raw }, the others unchanged) as the Solana quotes positions open at.
+export function pushSolanaQuotes(base, relayer, raws, ts) {
+  const prices = MARKETS.map((m, a) => (raws[a] ? BigInt(raws[a]) : 0n));
+  return send(base, [ix.pushQuotes(relayer.publicKey, prices, BigInt(ts))], [relayer], { label: 'push quotes', attempts: 1, tries: 40 });
+}
+export { hyperliquid as hyperliquidQuotes, jupiter as jupiterPrices };
+
 let quotesBusy = false;   // one Solana quotes push at a time from this process
 export async function pushOnce(er, relayer, { minGapS = 1, base = null, quoteGapS = 10 } = {}) {
   const now = Math.floor(Date.now() / 1000);
