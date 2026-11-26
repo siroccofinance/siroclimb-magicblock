@@ -4,9 +4,12 @@
 // one relay account per market on the rollup that one named key pushes prices
 // into (gasless). Gold is priced as XAUt (Tether Gold), which trades 24/7.
 //
-// Source, all week, one per market so the price never jumps between venues:
-// the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD, XAUt/USD:
-// tight books that tick through the night and the weekend); a market may also
+// Source, all week: the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD,
+// MSTRx/USD, XAUt/USD) averaged with the mid of Hyperliquid's trade.xyz perp
+// (xyz:TSLA, NVDA, AAPL, MSTR, GOLD: they trade 24/7 and keep ticking when a
+// Kraken book stands still, on US holidays for instance), so a tick on either
+// venue moves the price. When only Kraken answers, or the two are more than
+// 1.5 % apart, Kraken's mid alone (logged). A market may also
 // take Jupiter's price of its Solana mint (`source: 'jupiter'`), eased in. The
 // other venue is the sanity check: a price more than 1.5 % away from it (from
 // Kraken's bid-ask range for a Jupiter-priced market) is not pushed, and neither
@@ -41,6 +44,13 @@ async function kraken() {
   }
   return out;
 }
+async function hyperliquid() {
+  const r = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'allMids', dex: 'xyz' }), signal: AbortSignal.timeout(1500) }).then((x) => x.json()).catch(() => null);
+  const out = {};
+  for (const a of RELAY_ASSETS) { const v = r && MARKETS[a].hl ? Number(r[MARKETS[a].hl]) : 0; if (v > 0) out[a] = v; }
+  return out;
+}
 async function jupiter() {
   const j = await getJson(`https://lite-api.jup.ag/price/v3?ids=${RELAY_ASSETS.map((a) => MARKETS[a].mainnetMint).join(',')}`).catch(() => null);
   const out = {};
@@ -50,7 +60,7 @@ async function jupiter() {
 
 /// The relayed xStocks' prices now: { asset: { price, raw, ts, src } }.
 export async function fetchQuotes() {
-  const [k, jp] = await Promise.all([kraken(), jupiter()]);
+  const [k, jp, hl] = await Promise.all([kraken(), jupiter(), hyperliquid()]);
   const ts = Math.floor(Date.now() / 1000), out = {};
   for (const a of RELAY_ASSETS) {
     const kq = k[a], jq = jp[a];
@@ -60,7 +70,12 @@ export async function fetchQuotes() {
       price = jq; src = 'jupiter';
     } else {
       if (!kq || (jq && Math.abs(kq.mid / jq - 1) > MAX_GAP)) continue;
-      price = kq.mid; src = 'kraken';
+      const h = hl[a];
+      if (h && Math.abs(h / kq.mid - 1) <= MAX_GAP) { price = (kq.mid + h) / 2; src = 'kraken+hl'; }
+      else {
+        price = kq.mid; src = 'kraken';
+        console.log(`[relay] ${MARKETS[a].id}: Kraken alone (${h ? `Hyperliquid ${h} is ${((h / kq.mid - 1) * 100).toFixed(2)} % away` : 'no Hyperliquid mid'})`);
+      }
     }
     out[a] = { price, raw: Math.round(price / 10 ** MARKETS[a].exponent), ts, src };
   }

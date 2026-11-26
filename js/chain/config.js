@@ -41,7 +41,8 @@ export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawom
 /// Every market is priced on the rollup by the program's relay accounts
 /// (`["relay", asset]`), kept fresh with the asset's own 24/7 token market
 /// (js/chain/relay.js) by /api/relay, its cron and the keeper: the mid of
-/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold), or with
+/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold) averaged with Hyperliquid's trade.xyz
+/// 24/7 perp (`hl`) when the two agree within 1.5 %, or with
 /// `source: 'jupiter'`, Jupiter's price of the Solana mint (`mainnetMint`).
 /// The other venue is the sanity check. MagicBlock's rollups carry no xStock
 /// feed, Pyth's equity feeds stand still outside US hours and Pyth's XAU/USD
@@ -49,16 +50,16 @@ export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawom
 ///
 /// `hours`: when the price moves; '24/7' for every market.
 export const MARKETS = [
-  { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', relay: 'TSLAxUSD', exponent: -5, feed: 'EZzYNjVe8T3SfPiRknV4JA9JTfbfeBfWRoD8CymuUUHu', hours: '24/7',
+  { id: 'TSLAx', name: 'Tesla', ticker: 'TSLAx', kind: 'stock', relay: 'TSLAxUSD', hl: 'xyz:TSLA', exponent: -5, feed: 'EZzYNjVe8T3SfPiRknV4JA9JTfbfeBfWRoD8CymuUUHu', hours: '24/7',
     mint: 'EwksJmGYpSHWwznpeX8XGqHPBEhqyH4nHX92WH7uUz8g', mainnetMint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB' },
-  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', relay: 'NVDAxUSD', exponent: -5, feed: 'AuewuoKKM4GSphTixn1oHS4o37jZrFcghgSvUc5dJXF7', hours: '24/7',
+  { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', relay: 'NVDAxUSD', hl: 'xyz:NVDA', exponent: -5, feed: 'AuewuoKKM4GSphTixn1oHS4o37jZrFcghgSvUc5dJXF7', hours: '24/7',
     mint: '4hqVYfXyqy1R1Yr7hbRvq7veqqvrKCb7mXZE1CZdqdfJ', mainnetMint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh' },
-  { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', relay: 'AAPLxUSD', exponent: -5, feed: 'BMPPdknGVDDzPsRSwnhHyuR1YwmJ9xM9ij841S96rXY5', hours: '24/7',
+  { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', relay: 'AAPLxUSD', hl: 'xyz:AAPL', exponent: -5, feed: 'BMPPdknGVDDzPsRSwnhHyuR1YwmJ9xM9ij841S96rXY5', hours: '24/7',
     mint: 'yDvobkVXoAmXRPhJXn9C7nfh6GN3ppo9NiiEXyYdNBb', mainnetMint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp' },
   // gold as XAUt (Tether Gold), which trades 24/7: Kraken's XAUt/USD book, Jupiter's XAUt0 on Solana as the check
-  { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', relay: 'XAUTUSD', exponent: -3, feed: 'CGNjvcw4CJBdYKiV4aGVjqvgmMQfA9pTnz2V2bqzBp8N', hours: '24/7',
+  { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', relay: 'XAUTUSD', hl: 'xyz:GOLD', exponent: -3, feed: 'CGNjvcw4CJBdYKiV4aGVjqvgmMQfA9pTnz2V2bqzBp8N', hours: '24/7',
     mint: 'FWruv7WP2BuuL3ThDxfuGum1HGHe5uCMqTr8twJNaSQG', mainnetMint: 'AymATz4TCL9sWNEEV9Kvyz45CHVhDZ6kUgjTJPzLpU9P', decimals: 6 },
-  { id: 'MSTRx', name: 'MicroStrategy', ticker: 'MSTRx', kind: 'stock', relay: 'MSTRxUSD', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
+  { id: 'MSTRx', name: 'MicroStrategy', ticker: 'MSTRx', kind: 'stock', relay: 'MSTRxUSD', hl: 'xyz:MSTR', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
     mint: '9kHuWdmvbsY3GUH55NyWc4zmfkRBjcse8mXUD4zrERdX', mainnetMint: 'XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ' },
 ].map((m, index) => ({ decimals: 8, ...m, index, feedKey: new PublicKey(m.feed), mintKey: new PublicKey(m.mint) }));
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);
