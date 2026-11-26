@@ -528,6 +528,11 @@ $('#share').onclick = async () => {
   }
   // the hosted link carries the picture: open the post with it (a tab opened now, so no popup blocker,
   // pointed at X once the climb has settled and the link is signed)
+  // desktop: X can't take a picture from a web page, so the card goes to the clipboard first (started inside
+  // the click, before the tab is opened) and a tip says to paste it into the post with one keystroke
+  const copying = card && navigator.clipboard && window.ClipboardItem
+    ? navigator.clipboard.write([new ClipboardItem({ 'image/png': card.blob })]).then(() => true, () => false)
+    : Promise.resolve(false);
   if (link && link.r === ended && (link.url || !api.mock)) {
     let u = link.url, w = null;
     if (!u) {
@@ -536,15 +541,13 @@ $('#share').onclick = async () => {
       u = await Promise.race([link.pending, new Promise(r => setTimeout(() => r(null), 9000))]);
       btn.classList.remove('is-busy');
     }
-    if (u) { const href = intent(text, u); if (w) { w.opener = null; w.location.href = href; } else openTab(href); return; }
+    if (u) { const href = intent(text, u); if (w) { w.opener = null; w.location.href = href; } else openTab(href); if (card) showTip(await copying, href); return; }
     if (w) w.close();
   }
   const href = intent(text, url);
   // desktop: the picture goes to the clipboard, X opens with the post written, one paste adds the picture
-  let copied = false;
-  if (card && navigator.clipboard && window.ClipboardItem) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': card.blob })]); copied = true; } catch {} }
-  window.open(href, '_blank', 'noopener');
-  if (card) showTip(copied, href);
+  openTab(href);
+  if (card) showTip(await copying, href);
 };
 
 // ── sparkline: last 60 s, scrolls smoothly, entry line while playing
