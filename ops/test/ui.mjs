@@ -117,7 +117,7 @@ if (FLOW === 'menu') {
   const page = await (await fetch(URL.replace(/\/$/, '') + link)).text();
   const meta = (k) => (new RegExp(`(?:property|name)="${k}" content="([^"]+)"`).exec(page) || [])[1];
   const img = await fetch(meta('og:image').replace(/^https:\/\/[^/]+/, URL.replace(/\/$/, '')));
-  say('share', link.slice(0, 40) + '…', '|', meta('twitter:card'), '|', meta('og:title'), '| card', img.status, img.headers.get('content-type'));
+  say('share', link.length > 60 ? link.slice(0, 40) + '…' : link, '|', meta('twitter:card'), '|', meta('og:title'), '| card', img.status, img.headers.get('content-type'));
   if (meta('twitter:card') !== 'summary_large_image' || img.status !== 200) errs.push('share card');
   await pg.screenshot({ path: 'out/ui-5share.png' });
 }
