@@ -86,7 +86,7 @@ pub const PRICE_ORACLE_PROGRAM_ID: Pubkey = pubkey!("PriCems5tHihc6UDXDjzjeawomA
 /// Price accounts, in asset order: relay accounts of this program,
 /// `["relay", asset]`, that one named key keeps fresh (see `push_price`).
 /// Every market trades around the clock: MagicBlock's rollups carry no feed
-/// for the xStocks (TSLAx, NVDAx, AAPLx, GMEx) and Pyth's equity feeds stand
+/// for the xStocks (TSLAx, NVDAx, AAPLx, MSTRx) and Pyth's equity feeds stand
 /// still outside US hours, and Pyth's XAU/USD closes on weekends, so each
 /// market is priced from its own 24/7 token market (gold: XAUt, Tether Gold).
 /// The oracle branch of `read_feed` (MagicBlock's Pyth Lazer accounts,

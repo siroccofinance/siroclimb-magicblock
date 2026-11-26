@@ -31,7 +31,7 @@ pub const DESK_SEED: &[u8] = b"desk";
 pub const QUOTES_SEED: &[u8] = b"quotes";
 pub const LEND_SEED: &[u8] = b"stock_lend";
 
-/// Relay price exponent per market (TSLAx, NVDAx, AAPLx, XAUt, GMEx).
+/// Relay price exponent per market (TSLAx, NVDAx, AAPLx, XAUt, MSTRx).
 pub const EXPONENTS: [i32; ASSETS] = [-5, -5, -5, -3, -5];
 /// Decimals of tUSDC.
 pub const USDC_DECIMALS: u32 = 6;

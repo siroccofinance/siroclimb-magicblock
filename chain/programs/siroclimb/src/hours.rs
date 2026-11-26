@@ -14,7 +14,7 @@ pub const KIND_METAL: u8 = 1;
 /// their prices (the relay's) move all week.
 pub const KIND_ALWAYS: u8 = 2;
 
-/// Session kind per asset: TSLAx, NVDAx, AAPLx, gold (XAUt), GMEx.
+/// Session kind per asset: TSLAx, NVDAx, AAPLx, gold (XAUt), MSTRx.
 /// Every market is open all week; the equity and metal schedules are kept (and
 /// tested) for a market that would follow them.
 pub const KINDS: [u8; 5] = [KIND_ALWAYS, KIND_ALWAYS, KIND_ALWAYS, KIND_ALWAYS, KIND_ALWAYS];
