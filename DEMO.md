@@ -5,7 +5,7 @@ every market is open 24/7. Sound on.
 
 ## 1. Hook (0:00 to 0:20)
 
-Landing film, then **Start playing**.
+The landing scene (the live 3D staircase, the Sirocco coin rolling), then **Start playing**.
 
 > "Siroclimb is a one-minute leverage climb on real-world assets: Tesla, NVIDIA,
 > Apple and MicroStrategy xStocks, and gold. Every step adds leverage, up to 4x.
@@ -35,7 +35,13 @@ price updates).
 > crank ticks the climb on chain every half second: leverage steps, value, the bust.
 > All of that is free and instant."
 
-Point at the line under the stake bar: "Borrowed 25.00 tUSDC from the Sirocco Reserve".
+Point at the header under the price: "+0.04% since entry · moves ×90" (the game magnifies Tesla's
+moves 90 times), and at the line under the stake bar: "Holding 0.0654 TSLAx · Borrowed 12.50 tUSDC
+from the Sirocco Reserve".
+
+> "This is a real position: my stake bought real TSLAx tokens, sitting in this climb's escrow on
+> Solana, and every leverage step buys more with money borrowed from the Sirocco Reserve. The stairs
+> follow every tick: up when the price goes my way, down when it does not."
 
 > "The leverage is a real loan. At 2x, half of my position is tUSDC borrowed from
 > the Sirocco Reserve, a pool anyone can lend to. I pay a small fee and interest for
@@ -47,18 +53,23 @@ Cash out with **Space** around 2x to 3x.
 > transaction commits the result and hands the account back to Solana, where the
 > reserve pays me the position minus the borrow cost."
 
-The result shows **Borrowed up to** and **Borrow cost paid**.
+The result shows the tokens held, the **Position P&L** (what the real tokens made) and the
+**Game boost ×90** (the amplification, settled with the reserve), then **Borrowed up to** and
+**Borrow cost paid**.
 
 ## 4. Proof (1:40 to 2:00)
 
-On the result screen, click the **Verify** links: stake + delegate (Solana), begin
-(rollup, crank scheduled), cash out (rollup, commit + undelegate), settle (Solana).
+On the result screen, click the **Verify** links: stake + buy the tokens + delegate (Solana),
+begin (rollup, crank scheduled), cash out (rollup, commit + undelegate), settle (Solana), and the
+**position escrow**: the token account that held the TSLAx.
 
 > "Every step is on the explorer: two transactions on Solana, two on the rollup."
 
 ## 5. Another market, short (2:00 to 2:40)
 
-**Play again**, pick **MSTRx**, **Short**, **50**. Ride it a little longer.
+**Play again**, pick **MSTRx**, **Short**, **50**. Ride it a little longer: the header says
+"moves ×25", and the line under the stake bar "Short 0.6088 MSTRx" (borrowed from the desk's
+lending book and sold).
 
 > "Five markets, all priced on the rollup from their own 24/7 token market
 > through the program's relay: four xStocks and XAUt for gold. None of them

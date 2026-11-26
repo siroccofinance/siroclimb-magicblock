@@ -529,3 +529,9 @@ body[data-side="short"] .sideglow { --g: var(--short); }
 @media (max-width: 767px) {
   .markets { padding: 6px var(--x) 22px; margin: -6px calc(-1 * var(--x)) -22px; }
 }
+
+/* result on phones: the essential figures only, so the text stays below the coin */
+@media (max-width: 767px) {
+  .stats .is-minor { display: none; }
+  .result .proof { font-size: 12px; line-height: 1.7; }
+}

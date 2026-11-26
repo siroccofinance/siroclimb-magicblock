@@ -411,7 +411,9 @@ function showResult(res) {
   }
   if (res.peakBorrow > 0) stats.push(['Borrowed up to', `${money(res.peakBorrow)} tUSDC`]);
   if (!res.pack && res.borrowCost != null) stats.push(['Borrow cost paid', `${small(res.borrowCost)} tUSDC`]);
-  $('#rS').innerHTML = stats.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  // phones keep the essentials (the rest would push the text up over the coin)
+  const minor = /^(Time|Exit|.* entry|Borrowed up to|Held|Shorted)/;
+  $('#rS').innerHTML = stats.map(([k, v]) => `<div${minor.test(k) ? ' class="is-minor"' : ''}><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   showProof(run.id);
 }
 // every transaction of the climb, on Solana and on the rollup, linked to the explorer
