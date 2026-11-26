@@ -37,7 +37,7 @@ const ASSETS = [
   { id: 'NVDAx', name: 'NVIDIA', ticker: 'NVDAx', kind: 'stock', p0: 164.70, vol: 0.0010 },
   { id: 'AAPLx', name: 'Apple', ticker: 'AAPLx', kind: 'stock', p0: 349.03, vol: 0.0007 },
   { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', p0: 3633.4, vol: 0.0006 },
-  { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', p0: 27.46, vol: 0.0009 },
+  { id: 'MSTRx', name: 'MicroStrategy', ticker: 'MSTRx', kind: 'stock', p0: 82.1, vol: 0.0012 },
 ];
 
 export const rules = { ladder: [1, 1.5, 2, 2.5, 3, 3.5, 4], stepEvery: 6, duration: 60 };

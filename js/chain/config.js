@@ -41,7 +41,7 @@ export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawom
 /// Every market is priced on the rollup by the program's relay accounts
 /// (`["relay", asset]`), kept fresh with the asset's own 24/7 token market
 /// (js/chain/relay.js) by /api/relay, its cron and the keeper: the mid of
-/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold), or for GMEx,
+/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold), or with
 /// `source: 'jupiter'`, Jupiter's price of the Solana mint (`mainnetMint`).
 /// The other venue is the sanity check. MagicBlock's rollups carry no xStock
 /// feed, Pyth's equity feeds stand still outside US hours and Pyth's XAU/USD
@@ -58,8 +58,8 @@ export const MARKETS = [
   // gold as XAUt (Tether Gold), which trades 24/7: Kraken's XAUt/USD book, Jupiter's XAUt0 on Solana as the check
   { id: 'XAU', name: 'Gold', ticker: 'XAUt', kind: 'metal', relay: 'XAUTUSD', exponent: -3, feed: 'CGNjvcw4CJBdYKiV4aGVjqvgmMQfA9pTnz2V2bqzBp8N', hours: '24/7',
     mint: 'FWruv7WP2BuuL3ThDxfuGum1HGHe5uCMqTr8twJNaSQG', mainnetMint: 'AymATz4TCL9sWNEEV9Kvyz45CHVhDZ6kUgjTJPzLpU9P', decimals: 6 },
-  { id: 'GMEx', name: 'GameStop', ticker: 'GMEx', kind: 'stock', relay: 'GMExUSD', source: 'jupiter', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
-    mint: 'FvpjxWsG9e2kGUEgkqXSBY2nzjYqopKJXp25d1pwsgy', mainnetMint: 'Xsf9mBktVB9BSU5kf4nHxPq5hCBJ2j2ui3ecFGxPRGc' },
+  { id: 'MSTRx', name: 'MicroStrategy', ticker: 'MSTRx', kind: 'stock', relay: 'MSTRxUSD', exponent: -5, feed: '2k53rB3byWy3dEQobyjZCfrMhhPJ5FmVbtp66KwwprWr', hours: '24/7',
+    mint: '9kHuWdmvbsY3GUH55NyWc4zmfkRBjcse8mXUD4zrERdX', mainnetMint: 'XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ' },
 ].map((m, index) => ({ decimals: 8, ...m, index, feedKey: new PublicKey(m.feed), mintKey: new PublicKey(m.mint) }));
 export const marketIndex = (id) => MARKETS.findIndex((m) => m.id === id);
 
@@ -69,7 +69,7 @@ export const ONE_USDC = 1_000_000;
 export const LADDER = [1, 1.5, 2, 2.5, 3, 3.5, 4];
 export const STEP_SECONDS = 6;
 export const RUN_SECONDS = 60;
-export const BOOST = [90, 25, 90, 180, 55];
+export const BOOST = [90, 25, 90, 180, 25];
 /// Markets priced by the program's relay accounts (the others by MagicBlock's oracle).
 export const RELAY_ASSETS = [0, 1, 2, 3, 4];
 /// The Sirocco desk's spread on every fill (basis points), mirrored from the program's Desk account.
