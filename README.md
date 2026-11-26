@@ -84,8 +84,8 @@ Rounds (player-versus-player pots, no borrowing) were removed before the reserve
 
 | Market | Price | When it moves |
 |---|---|---|
-| TSLAx, NVDAx, AAPLx, MSTRx | the xStock's own market, around the clock: mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD), Jupiter's price of the Solana mint as the check, relayed into the rollup | 24/7 |
-| Gold (XAUt) | XAUt (Tether Gold, one token per troy ounce): mid of Kraken's XAUt/USD book, Jupiter's XAUt0 price on Solana as the check, relayed into the rollup | 24/7 |
+| TSLAx, NVDAx, AAPLx, MSTRx | the xStock's own market, around the clock: mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD) averaged with Hyperliquid's trade.xyz 24/7 perp (xyz:TSLA, NVDA, AAPL, MSTR) when they agree within 1.5 %, Jupiter's price of the Solana mint as the check, relayed into the rollup | 24/7 |
+| Gold (XAUt) | XAUt (Tether Gold, one token per troy ounce): mid of Kraken's XAUt/USD book averaged with Hyperliquid's xyz:GOLD when they agree within 1.5 %, Jupiter's XAUt0 price on Solana as the check, relayed into the rollup | 24/7 |
 
 **Why a relay.** The xStocks and XAUt are tokens that trade around the clock, nights and weekends. Pyth's XAU/USD (spot gold), which gold read until 25 Nov, closes from Friday 17:00 to Sunday 18:00 New York and an hour every day. Pyth's US equity feeds, which MagicBlock pushes into the rollups, stand still outside US hours (checked 24 Nov 2026, 18:30 New York: TSLA, NVDA, AAPL, GME fresh but frozen), and MagicBlock's rollups carry none of Pyth's 24/7 xStock feeds for these four (`Crypto.TSLAX/USD` 1847, `NVDAX` 1833, `AAPLX` 1792; `GMEX` 3387 is not live yet; only SPYX is on the rollup), and Pyth's Hermes API refuses keyless reads. So the program keeps one relay account per market on the rollup (`["relay", asset]`, `init_relay`, `delegate_relay`), and only the relay key named at init can `push_price` into it (gasless on the rollup; prices may not go back in time or come from the future). `/api/relay` pushes all five in one rollup transaction, at most about once a second, whenever a browser has the game open (the page asks every second) and from a Vercel cron that keeps pushing every second when nobody does; the optional keeper does the same. Each push reads both venues: the market's own source, and the other one as a sanity check (a price more than 1.5 % away from Jupiter, or a Jupiter price outside Kraken's bid-ask range by 1.5 %, is not pushed). A relay that stops ages like any feed: past `MAX_PRICE_AGE` (10 s) the program holds a live climb still and refuses new ones. Swapping the source for signed Pyth updates is one function in `js/chain/relay.js`.
 
@@ -105,7 +105,7 @@ The xStocks have no devnet mints, so devnet mirrors were created with the same n
 | Stakes, Sirocco Reserve (shares, reserved liquidity, borrow lines, lender positions) | ✓ | | |
 | Session authorisation (`SessionTokenV2`) and spending allowance | ✓ | | |
 | Live climbs: entry price, ticks, leverage, amount borrowed, bust, cash out | | ✓ | |
-| Prices: one relay account per market (24/7, pushed by `/api/relay` and its cron) | | ✓ | relay source: Kraken / Jupiter |
+| Prices: one relay account per market (24/7, pushed by `/api/relay` and its cron) | | ✓ | relay source: Kraken + Hyperliquid / Jupiter |
 | Profiles: handle, record, bests, last 8 climbs, pack | ✓ | | |
 | VRF draws: leverage packs | ✓ | | |
 | Leaderboards (today, all time) | read | | front |
@@ -203,7 +203,7 @@ CI (GitHub Actions) runs the rules tests and the client checks on every pull req
 
 ## Known gaps
 
-- **The xStock relay is a trusted key.** Only the relay key named at `init_relay` can push, prices may not go back in time, and a stale relay closes the market, but the prices themselves are as good as the relay's sources (Kraken's xStock book, Jupiter's xStock price on Solana, cross-checked at 1.5 %). Signed Pyth updates (`Crypto.TSLAX/USD` and the others) verified on chain would remove the trust once MagicBlock carries them on the rollup.
+- **The xStock relay is a trusted key.** Only the relay key named at `init_relay` can push, prices may not go back in time, and a stale relay closes the market, but the prices themselves are as good as the relay's sources (Kraken's xStock book, Hyperliquid's trade.xyz perps, Jupiter's xStock price on Solana, cross-checked at 1.5 %). Signed Pyth updates (`Crypto.TSLAX/USD` and the others) verified on chain would remove the trust once MagicBlock carries them on the rollup.
 - **Delegation cost.** Each climb is one delegation, about 0.003 SOL of protocol fees on magicblock-core 2.0 (FINDINGS #4), paid by the session key. The front funds the session key in proportion to the wallet (up to about 60 climbs) and shows the fuel left in the wallet menu; keeping a player's run delegated between climbs would remove the cost and is left for after the hackathon.
 
 ## Repository
