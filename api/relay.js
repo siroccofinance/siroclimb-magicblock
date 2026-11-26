@@ -1,4 +1,4 @@
-// POST /api/relay: push the xStocks' 24/7 prices (TSLAx, NVDAx, AAPLx, GMEx) into the
+// POST /api/relay: push the xStocks' 24/7 prices (TSLAx, NVDAx, AAPLx, MSTRx, and XAUt for gold) into the
 // program's relay accounts on the rollup (gasless). Called by browsers while
 // the game is open, and by the keeper; pushes at most about once a second.
 // Vercel's cron calls it every minute and it then keeps pushing every second for
