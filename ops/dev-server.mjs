@@ -14,7 +14,7 @@ for (const [env, file] of [['FAUCET_SECRET_KEY', 'faucet.json'], ['RELAYER_SECRE
   if (!process.env[env] && fs.existsSync(f)) process.env[env] = fs.readFileSync(f, 'utf8').trim();
 }
 const routes = { '/api/faucet': (await import('../api/faucet.js')).default, '/api/relay': (await import('../api/relay.js')).default, '/api/share': (await import('../api/share.js')).default,
-  '/api/card': (await import('../api/card.js')).default, '/api/s': (await import('../api/s.js')).default };
+  '/api/card': (await import('../api/card.js')).default, '/api/s': (await import('../api/s.js')).default, '/api/change': (await import('../api/change.js')).default };
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.webp': 'image/webp', '.webm': 'video/webm', '.mp4': 'video/mp4', '.json': 'application/json', '.woff2': 'font/woff2' };
 

@@ -202,13 +202,26 @@ for (const a of assets) {
   b.onclick = () => { C.asset = a.id; store.set('asset', a.id); renderLobby(); };
   marketsEl.appendChild(b);
   chip[a.id] = { b, p: b.querySelector('.p'), c: b.querySelector('.c'), k: b.querySelector('.k'), kind: KIND[a.kind] || a.kind };
-  api.subscribePrice(a.id, ({ price: p }) => {
-    if (screen !== 'lobby') return;
-    const h = api.history(a.id, 60), ch = h.length ? (p / h[0].price - 1) * 100 : 0;
-    chip[a.id].p.textContent = price(p);
-    chip[a.id].c.textContent = sgn(ch) + Math.abs(ch).toFixed(1) + '%'; chip[a.id].c.className = 'c ' + (ch >= 0 ? 'is-up' : 'is-down');
-  });
+  api.subscribePrice(a.id, ({ price: p }) => { chip[a.id].last = p; if (screen === 'lobby') drawChip(a.id); });
 }
+// the 24 h change: the live price against Kraken's price a day back (api/change); hidden when unknown
+const ref24 = {};
+function drawChip(id) {
+  const c = chip[id], p = c.last, r = ref24[id];
+  if (p > 0) c.p.textContent = price(p);
+  if (!(p > 0 && r > 0)) { c.c.textContent = ''; c.c.className = 'c'; return; }
+  const ch = (p / r - 1) * 100;
+  c.c.innerHTML = `${sgn(ch)}${Math.abs(ch).toFixed(2)}%<small style="opacity:.6;font-size:.75em;margin-left:.2em">24h</small>`;
+  c.c.className = 'c ' + (ch >= 0 ? 'is-up' : 'is-down'); c.c.title = 'Change over the last 24 hours';
+}
+async function loadChange() {
+  try {
+    const j = await (await fetch('api/change')).json();
+    for (const [id, v] of Object.entries(j.ref24h || {})) ref24[id] = v.price;
+    for (const id in chip) drawChip(id);
+  } catch { /* the figure stays hidden */ }
+}
+loadChange(); setInterval(loadChange, 5 * 60e3);
 function bindSeg(el, key, parse = v => v) {
   el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     if (b.disabled) return;
