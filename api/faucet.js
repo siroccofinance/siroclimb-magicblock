@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0];
     const hits = (perIp.get(ip) || []).filter((t) => Date.now() - t < 3600e3);
     const local = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip);
-    if (hits.length >= 10 && !local) return out(200, { skipped: 'too many requests' });
+    if (hits.length >= 5 && !local) return out(200, { skipped: 'too many requests' });
     perIp.set(ip, [...hits, Date.now()]);
     const { address } = await readJson(req);
     const to = new PublicKey(address);
