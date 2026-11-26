@@ -105,7 +105,7 @@ const begin = (label, when, expectCode, asset = XAU, who = player) => {
 const runStatus = (who = player) => decodeRun(Buffer.from(svm.getAccount(runPda(who.publicKey)).data)).status;
 
 // every market trades around the clock: a climb on each of the five on a Saturday, gold (XAUt) included
-const names = ['TSLAx', 'NVDAx', 'AAPLx', 'XAUt', 'GMEx'];
+const names = ['TSLAx', 'NVDAx', 'AAPLx', 'XAUt', 'MSTRx'];
 for (const asset of [0, 1, 2, 3, 4]) {
   const name = names[asset], p = asset === XAU ? player : Keypair.generate();
   if (p !== player) {
