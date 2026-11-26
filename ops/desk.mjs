@@ -16,7 +16,7 @@ import { adminKeypair, baseConnection, namedKeypair } from './lib/env.mjs';
 
 const conn = baseConnection(), admin = adminKeypair(), relayer = namedKeypair('relayer');
 // inventory per market, in whole tokens (about half a million dollars each), for the desk and for the lending book
-const INVENTORY = { TSLAx: 1_300, NVDAx: 3_300, AAPLx: 1_400, XAUt: 140, GMEx: 18_000 };
+const INVENTORY = { TSLAx: 1_300, NVDAx: 3_300, AAPLx: 1_400, XAUt: 140, MSTRx: 6_000 };
 const FLOAT = 2_000_000; // tUSDC
 
 function ata22Create(payer, owner, mint) {

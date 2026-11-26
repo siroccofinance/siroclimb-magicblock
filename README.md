@@ -2,7 +2,7 @@
 
 **A one-minute leverage climb on tokenized stocks and gold, played on an Ephemeral Rollup and settled on Solana.**
 
-Pick a market (TSLAx, NVDAx, AAPLx, GMEx or gold as XAUt), every one open 24/7, go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Leverage is a real loan: past 1x the rest of the position is borrowed from the **Sirocco Reserve**, a tUSDC lending pool anyone can lend to.
+Pick a market (TSLAx, NVDAx, AAPLx, MSTRx or gold as XAUt), every one open 24/7, go long or short: the coin rolls up and down a staircase that follows the live price, leverage climbs from 1x to 4x every 6 seconds over a 60 second climb, and you cash out whenever you like. Your stake is the most you can lose. Leverage is a real loan: past 1x the rest of the position is borrowed from the **Sirocco Reserve**, a tUSDC lending pool anyone can lend to.
 
 | | |
 |---|---|
@@ -42,7 +42,7 @@ Timed rounds (everyone on the same market, a pot split 50 / 30 / 20) were remove
 
 ## Real positions: the Sirocco desk
 
-Every climb holds real market tokens: the xStock mirrors (TSLAx, NVDAx, AAPLx, GMEx) and an XAUt mirror for gold, Token-2022 mints with the real tokens' names, symbols and decimals. Devnet has no liquidity for them, so the program runs its own venue, the **Sirocco desk**: a program-owned account that quotes each token at the relay's live price plus or minus 0.05 % and holds inventories of the tokens and of tUSDC. A **stock-lending book**, also program-owned, lends the tokens that shorts sell.
+Every climb holds real market tokens: the xStock mirrors (TSLAx, NVDAx, AAPLx, MSTRx) and an XAUt mirror for gold, Token-2022 mints with the real tokens' names, symbols and decimals. Devnet has no liquidity for them, so the program runs its own venue, the **Sirocco desk**: a program-owned account that quotes each token at the relay's live price plus or minus 0.05 % and holds inventories of the tokens and of tUSDC. A **stock-lending book**, also program-owned, lends the tokens that shorts sell.
 
 | | Long | Short |
 |---|---|---|
@@ -84,8 +84,7 @@ Rounds (player-versus-player pots, no borrowing) were removed before the reserve
 
 | Market | Price | When it moves |
 |---|---|---|
-| TSLAx, NVDAx, AAPLx | the xStock's own market, around the clock: mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD), relayed into the rollup | 24/7 |
-| GMEx | Jupiter's price of the GMEx mint on Solana (its Kraken book is thin and wide), eased in at most 0.15 % a second, relayed into the rollup | 24/7 |
+| TSLAx, NVDAx, AAPLx, MSTRx | the xStock's own market, around the clock: mid of Kraken's xStock book (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD), Jupiter's price of the Solana mint as the check, relayed into the rollup | 24/7 |
 | Gold (XAUt) | XAUt (Tether Gold, one token per troy ounce): mid of Kraken's XAUt/USD book, Jupiter's XAUt0 price on Solana as the check, relayed into the rollup | 24/7 |
 
 **Why a relay.** The xStocks and XAUt are tokens that trade around the clock, nights and weekends. Pyth's XAU/USD (spot gold), which gold read until 25 Nov, closes from Friday 17:00 to Sunday 18:00 New York and an hour every day. Pyth's US equity feeds, which MagicBlock pushes into the rollups, stand still outside US hours (checked 24 Nov 2026, 18:30 New York: TSLA, NVDA, AAPL, GME fresh but frozen), and MagicBlock's rollups carry none of Pyth's 24/7 xStock feeds for these four (`Crypto.TSLAX/USD` 1847, `NVDAX` 1833, `AAPLX` 1792; `GMEX` 3387 is not live yet; only SPYX is on the rollup), and Pyth's Hermes API refuses keyless reads. So the program keeps one relay account per market on the rollup (`["relay", asset]`, `init_relay`, `delegate_relay`), and only the relay key named at init can `push_price` into it (gasless on the rollup; prices may not go back in time or come from the future). `/api/relay` pushes all five in one rollup transaction, at most about once a second, whenever a browser has the game open (the page asks every second) and from a Vercel cron that keeps pushing every second when nobody does; the optional keeper does the same. Each push reads both venues: the market's own source, and the other one as a sanity check (a price more than 1.5 % away from Jupiter, or a Jupiter price outside Kraken's bid-ask range by 1.5 %, is not pushed). A relay that stops ages like any feed: past `MAX_PRICE_AGE` (10 s) the program holds a live climb still and refuses new ones. Swapping the source for signed Pyth updates is one function in `js/chain/relay.js`.
@@ -94,7 +93,7 @@ Rounds (player-versus-player pots, no borrowing) were removed before the reserve
 
 The charts open full: the last 90 seconds of each market are read back from its price account's update transactions on the rollup (keyless, same source as the live price; `js/chain/history.js`).
 
-Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, GMEx 55). Measured on the 24/7 sources at night (24 Nov 2026, 19:00 New York): the xStocks move about 1 bp a second in a few ticks a minute, so a minute's climb still swings by several percent at 1.5x. A boost is a game rule, stated in the rules sheet.
+Real minute-scale moves are tiny (Tesla moves about 0.07 % in three minutes after hours), so each market's move is **boosted** before leverage applies (TSLAx 90, NVDAx 25, AAPLx 90, gold 180, MSTRx 25). MSTRx (MicroStrategy, which follows bitcoin and so moves nights and weekends) replaced GMEx on 26 Nov: GameStop's xStock trades a few times a day on Kraken (a 4 % spread) and its Jupiter price stood still, so GMEx sat flat at night; MSTRx moves about 2.3 bp a second on Kraken, hence its boost of 25. Measured on the 24/7 sources at night (24 Nov 2026, 19:00 New York): the xStocks move about 1 bp a second in a few ticks a minute, so a minute's climb still swings by several percent at 1.5x. A boost is a game rule, stated in the rules sheet.
 
 The xStocks have no devnet mints, so devnet mirrors were created with the same name, symbol and decimals (Token-2022, 8 decimals); see [DEPLOYMENTS.md](DEPLOYMENTS.md).
 
@@ -161,9 +160,9 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 | `npm run chain:build` | `anchor build` in `chain/` |
 | `npm run chain:test` | Rust unit tests of the game rules |
 | `npm run setup` | one-time, idempotent: mint, vault, config, the bankroll and the Sirocco Reserve opened on it |
-| `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for GMEx) |
+| `npm run probe` | one session-keyed climb through the rollup, step by step (`ASSET=4` for MSTRx) |
 | `npm run battery -- 24 2` | on-chain battery: lenders, solo waves on the reserve, refusals, packs ([BATTERY.md](BATTERY.md)) |
-| `npm run test:ui` | the real front in headless Chrome (`FLOW=pack`, `menu`, `reserve`; `MARKET=GMEx` picks the market; `FRESH=1` from an empty burner) |
+| `npm run test:ui` | the real front in headless Chrome (`FLOW=pack`, `menu`, `reserve`; `MARKET=MSTRx` picks the market; `FRESH=1` from an empty burner) |
 | `npm run ci` | every CI step, locally |
 | `npm run test:hours` | the on-chain market hours in LiteSVM (after `npm run chain:build`) |
 | `npm run test:reserve` | the Sirocco Reserve in LiteSVM: shares, the guard, borrow cost, `grow_run` |
@@ -179,7 +178,7 @@ Every script signs with Siroclimb's own deployer (`~/.config/siroclimb/solana/de
 | Sirocco Reserve on the built program (LiteSVM) | `npm run test:reserve` | 24 / 24: the bankroll becomes the admin's shares, deposit and withdraw at the share price, 4 x stake reserved and a 3 x stake line per climb, `ReserveFull`, `NotEnoughLiquidity`, `BadShares`, settlement charges exactly the front's borrow cost, lenders' positions move with the climb, `grow_run` on an old run account |
 | On-chain battery | `npm run battery -- 24 2` | with real positions (`-- 10 2`, 25 Nov): **307 / 307**, every climb checked for its opening fill, escrow, close and real P&L + boost = result; with the Sirocco Reserve (`-- 8 1`): **156 / 156**: 3 lenders deposit and withdraw at the share price, 8 simultaneous climbs on all five markets each checked for its reservation, borrow line and borrow cost, refusals, VRF packs, the reserve square at the end; solo only before it: 118 / 118; earlier, with rounds: **404 / 404** (48 simultaneous climbs by 24 session-keyed players, two full 24-seat rounds drawn by VRF) and **132 / 132** after the GMEx upgrade ([BATTERY.md](BATTERY.md); earlier runs found FINDINGS #6, #7, #13) |
 | Browser, solo climb from an empty burner | `npm run test:ui` | onboarding, climb, cash out, 4 explorer proof links, Share opens X with a signed `/s/` link (summary_large_image, card PNG 200), 0 console errors |
-| Browser, a GMEx climb | `MARKET=GMEx npm run test:ui` | GMEx card open in the lobby, climb at the GME price, cash out, 4 proof links, 0 console errors |
+| Browser, an MSTRx climb | `MARKET=MSTRx npm run test:ui` | MSTRx card open in the lobby, climb at the MSTRx price, cash out, proof links, 0 console errors |
 | Browser, leverage pack | `FLOW=pack npm run test:ui` | VRF draw, free climb capped at its tier, gain-only result, 0 console errors |
 | Browser, wallet menu | `FLOW=menu npm run test:ui` | handle and session shown, handle renamed on chain, 0 console errors |
 | Browser, Sirocco Reserve | `FLOW=reserve npm run test:ui` | Reserve panel stats, 25 tUSDC lent, everything withdrawn, 0 console errors; the solo flow shows "Borrowed 12.50 tUSDC from the Sirocco Reserve" at 1.5x and the borrow cost on the result |

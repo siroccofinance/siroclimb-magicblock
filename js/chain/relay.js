@@ -1,17 +1,18 @@
 // Price relay. Every market trades around the clock, but MagicBlock's rollups
-// carry no TSLAx, NVDAx, AAPLx or GMEx feed, Pyth's equity feeds stand still
+// carry no TSLAx, NVDAx, AAPLx or MSTRx feed, Pyth's equity feeds stand still
 // outside US hours and Pyth's XAU/USD closes on weekends, so the program keeps
 // one relay account per market on the rollup that one named key pushes prices
 // into (gasless). Gold is priced as XAUt (Tether Gold), which trades 24/7.
 //
 // Source, all week, one per market so the price never jumps between venues:
-// the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD, XAUt/USD: tight
-// books that tick through the night and the weekend), or Jupiter's price of the Solana mint
-// for GMEx (its Kraken book is thin and wide). The other venue is the sanity
-// check: a price more than 1.5 % away from it (from Kraken's bid-ask range for
-// GMEx) is not pushed, and neither is a market whose source did not answer;
-// the relay then ages, and past MAX_PRICE_AGE the program treats the market
-// as closed until a good price comes back.
+// the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD, XAUt/USD:
+// tight books that tick through the night and the weekend); a market may also
+// take Jupiter's price of its Solana mint (`source: 'jupiter'`), eased in. The
+// other venue is the sanity check: a price more than 1.5 % away from it (from
+// Kraken's bid-ask range for a Jupiter-priced market) is not pushed, and neither
+// is a market whose source did not answer; the relay then ages, and past
+// MAX_PRICE_AGE the program treats the market as closed until a good price
+// comes back.
 // Pushed by api/relay.js (called by any browser while the game is open) and
 // by the ops keeper. Pyth's Crypto.TSLAX/USD (Lazer 1847), NVDAX (1833),
 // AAPLX (1792) would drop in here once MagicBlock carries them.
