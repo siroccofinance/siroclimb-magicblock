@@ -1,4 +1,4 @@
-// GET /s/<token> (rewritten to /api/s?t=<token>): the shared climb's page. Link previews read its
+// GET /s/<token> (rewritten to /api/s?t=<token>, a token of about 30 characters): the shared climb's page. Link previews read its
 // summary_large_image card; people are sent on to the game.
 import { originOf, describe, headline, verify } from './_share.js';
 
