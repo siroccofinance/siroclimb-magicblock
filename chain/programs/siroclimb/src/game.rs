@@ -20,7 +20,7 @@ pub const RUN_SECONDS: i64 = 60;
 /// before the ladder's leverage applies: with a boost of 90 a 0.1 % move of
 /// TSLAx moves the climb like a 9 % move at 1x. Tuned per market from the live
 /// feeds' per-second volatility, so every market plays about as lively.
-pub const BOOST: [u32; ASSETS] = [90, 25, 90, 180, 25];
+pub const BOOST: [u32; ASSETS] = [90, 25, 90, 60, 25];
 
 /// Fixed point of price returns: 1e9 = +100 %.
 pub const PPB: i128 = 1_000_000_000;
