@@ -1,7 +1,7 @@
-// The cron's price stream: Hyperliquid's trade.xyz best bid and offer over a WebSocket (`bbo`: a message on
-// every change of the top of the book, no REST rate limit; `l2Book` only sends a snapshot every few seconds),
-// the top-of-book microprice of each market recomputed on every message, and pushed into the rollup's relay accounts on
-// every change, at most every 250 ms (all changed markets in one transaction, sent without waiting for it). The
+// The cron's price stream: Hyperliquid's trade.xyz books over a WebSocket (no REST rate limit): `bbo` (every
+// change of the best bid or ask), `l2Book` snapshots (top-5 depth) and `trades`; the price is recomputed on
+// every message and pushed into the rollup's relay accounts on every change, every 80 ms at most (all changed
+// markets in one transaction; one send in flight, always with the latest values, so they land in order). The
 // Solana quotes follow every 10 s. A market whose book has gone quiet on the socket for 5 s is priced by the
 // REST path instead (microprice, then mid, then Kraken), and Jupiter's price stays the band check.
 import { MARKETS, RELAY_ASSETS } from '../js/chain/config.js';
@@ -21,18 +21,41 @@ function fastSender(er, relayer) {
   };
 }
 
-const PUSH_MS = 250, QUOTES_S = 10, STALE_MS = 5000, BAND = 0.03;
+const PUSH_MS = 80, QUOTES_S = 10, STALE_MS = 5000, BAND = 0.03;
 
-async function openSocket(onBook) {
+// three real feeds per market, each message moves the price: the top-of-book microprice (bbo, every change of
+// the best bid or ask), the top-5 depth-weighted microprice (l2Book snapshots) and the last trade (trades)
+async function openSocket(on) {
   const WS = globalThis.WebSocket || (await import('ws')).default;
   const ws = new WS('wss://api.hyperliquid.xyz/ws');
   ws.onopen = () => {
-    for (const a of RELAY_ASSETS) if (MARKETS[a].hl) ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'bbo', coin: MARKETS[a].hl } }));
+    for (const a of RELAY_ASSETS) {
+      const coin = MARKETS[a].hl; if (!coin) continue;
+      for (const sub of [{ type: 'bbo', coin }, { type: 'l2Book', coin, fast: true }, { type: 'trades', coin }]) ws.send(JSON.stringify({ method: 'subscribe', subscription: sub }));
+    }
   };
   ws.onmessage = (ev) => {
-    try { const m = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString()); if (m.channel === 'bbo' && m.data && m.data.bbo) onBook({ coin: m.data.coin, levels: [[m.data.bbo[0]], [m.data.bbo[1]]] }); } catch {}
+    try {
+      const m = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString()), d = m.data;
+      if (m.channel === 'bbo' && d && d.bbo) on(d.coin, 'm1', microprice({ levels: [[d.bbo[0]], [d.bbo[1]]] }));
+      else if (m.channel === 'l2Book' && d && d.levels) on(d.coin, 'm5', depthMicro(d.levels, 5));
+      else if (m.channel === 'trades' && Array.isArray(d)) for (const t of d) on(t.coin, 'tr', Number(t.px));
+    } catch {}
   };
   return ws;
+}
+/// Microprice over the top `n` levels: each side's size-weighted price, weighted by the other side's size.
+function depthMicro(levels, n) {
+  const side = (l) => { let s = 0, v = 0; for (const x of l.slice(0, n)) { s += +x.sz; v += +x.px * +x.sz; } return [s ? v / s : 0, s]; };
+  const [bp, bs] = side(levels[0] || []), [ap, as] = side(levels[1] || []);
+  return bp > 0 && ap > 0 && bs + as > 0 ? (bp * as + ap * bs) / (bs + as) : 0;
+}
+/// The relayed price: mostly the top-of-book microprice, with the depth microprice and the last trade (each
+/// within 0.5 % of it) weighing 15 % each.
+function blend(f) {
+  if (!(f.m1 > 0)) return 0;
+  const near = (v) => (v > 0 && Math.abs(v / f.m1 - 1) < 0.005 ? v : f.m1);
+  return 0.7 * f.m1 + 0.15 * near(f.m5) + 0.15 * near(f.tr);
 }
 
 export async function stream(er, base, relayer, ms) {
@@ -41,9 +64,11 @@ export async function stream(er, base, relayer, ms) {
   const sendFast = fastSender(er, relayer);
   let jup = {}, jupAt = 0, restAt = 0, quotesAt = 0, inflight = 0, quotesBusy = false, lastTs = 0;
   let ws = null;
-  const connect = async () => { try { ws = await openSocket((d) => {
-    const a = byCoin[d.coin], p = microprice(d);
-    if (a == null || !(p > 0)) return;
+  const feeds = {};
+  const connect = async () => { try { ws = await openSocket((coin, kind, v) => {
+    const a = byCoin[coin]; if (a == null || !(v > 0)) return;
+    const f = (feeds[a] ||= {}); f[kind] = v;
+    const p = blend(f); if (!(p > 0)) return;
     stats.books++; live[a] = { raw: Math.round(p / 10 ** MARKETS[a].exponent), at: Date.now() };
   }); ws.onclose = () => { ws = null; }; } catch { ws = null; } };
   await connect();

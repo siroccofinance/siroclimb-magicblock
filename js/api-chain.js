@@ -50,24 +50,29 @@ const feeds = MARKETS.map((m) => ({ m, raw: 0, price: 0, ts: 0, hist: [], subs: 
 /// Open = inside a trading session (Pyth's schedule) and the price is fresh.
 const isOpen = (f) => f.ts > 0 && Date.now() / 1000 - f.ts <= MAX_PRICE_AGE && inSession(f.m.hours);
 const toUsd = (asset, raw) => raw * 10 ** MARKETS[asset].exponent;
+function applyPrice(i, data, now, beat = false) {   // beat: record it even unchanged (keeps the chart's clock)
+  const f = feeds[i], p = decodePrice(data);
+  if (!(p.raw > 0)) return;
+  f.ts = Math.max(f.ts, p.ts);
+  if (p.raw === f.raw && f.hist.length && !beat) return;
+  f.raw = p.raw; f.price = toUsd(i, p.raw);
+  f.hist.push({ price: f.price, ts: now }); if (f.hist.length > 4000) f.hist.shift();
+  f.subs.forEach((cb) => cb({ price: f.price, ts: now }));
+}
 let polling = false;
 async function pollPrices() {
   if (polling) return; polling = true;
   try {
     const accs = await er.getMultipleAccountsInfo(MARKETS.map((m) => m.feedKey));
     const now = Date.now();
-    accs.forEach((a, i) => {
-      if (!a) return;
-      const f = feeds[i], p = decodePrice(a.data);
-      if (!(p.raw > 0)) return;
-      f.raw = p.raw; f.ts = p.ts; f.price = toUsd(i, p.raw);
-      f.hist.push({ price: f.price, ts: now }); if (f.hist.length > 1200) f.hist.shift();
-      f.subs.forEach((cb) => cb({ price: f.price, ts: now }));
-    });
+    accs.forEach((a, i) => { if (a) applyPrice(i, a.data, now, true); });
     priceTick(now);
   } catch (e) { log('prices', e.message); } finally { polling = false; }
 }
-setInterval(pollPrices, 200);   // the relay moves up to four times a second
+// every write to a price account arrives over the rollup's websocket as it lands (the relay pushes up to
+// about ten times a second); polling every second is the backstop
+MARKETS.forEach((m, i) => { try { er.onAccountChange(m.feedKey, (a) => { const now = Date.now(); applyPrice(i, a.data, now); priceTick(now); }, 'processed'); } catch (e) { log('price socket', e.message); } });
+setInterval(pollPrices, 1000);
 pollPrices();
 
 // The chart starts full: the last 90 s of every market, read back from its
