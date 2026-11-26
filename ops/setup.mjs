@@ -2,9 +2,6 @@
 // house vault (token account owned by config), config, the bankroll and the
 // Sirocco Reserve opened on it (the deployer is its first lender).
 // Writes js/chain/deployment.js for the front and the scripts.
-// NOTE: the one-time setup instructions (initialize, init_reserve, init_relay, delegate_relay, init_desk,
-// set_desk, fund_house, close_round_slot) ran on devnet and were removed from the program on 25 Nov 2026
-// to keep its binary small. A new deployment needs the program built from commit 13a9760 for its setup.
 import fs from 'fs';
 import { Keypair, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { Buffer } from 'buffer';
