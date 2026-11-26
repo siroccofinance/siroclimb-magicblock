@@ -205,7 +205,10 @@ for (const a of assets) {
   b.onclick = () => { C.asset = a.id; store.set('asset', a.id); renderLobby(); };
   marketsEl.appendChild(b);
   chip[a.id] = { b, p: b.querySelector('.p'), c: b.querySelector('.c'), k: b.querySelector('.k'), kind: KIND[a.kind] || a.kind };
-  api.subscribePrice(a.id, ({ price: p }) => { chip[a.id].last = p; if (screen === 'lobby') drawChip(a.id); });
+  api.subscribePrice(a.id, ({ price: p }) => {
+    chip[a.id].last = p; if (screen === 'lobby') drawChip(a.id);
+    if (screen === 'game' && TK && run && run.assetId === a.id) levelFrom(p);   // the stairs take every relay value
+  });
 }
 // the 24 h change: the live price against Kraken's price a day back (api/change); hidden when unknown
 const ref24 = {};
@@ -347,7 +350,7 @@ function onUpdate(u) {
     const kn = $('#gKnob'); kn.classList.remove('is-hit'); void kn.offsetWidth; kn.classList.add('is-hit');
   }
   if (G) G.dangerTo = u.risk > 0.3 ? Math.min(1, (u.risk - 0.3) / 0.6) : 0;
-  if (TK) { TK.dangerTo = u.risk > 0.3 ? Math.min(1, (u.risk - 0.3) / 0.6) : 0; levelFrom(u.price); }
+  if (TK) TK.dangerTo = u.risk > 0.3 ? Math.min(1, (u.risk - 0.3) / 0.6) : 0;
 }
 function runEntry() { const i = api.runInfo(run.id); return i ? i.entryPrice : run.entryPrice; }
 

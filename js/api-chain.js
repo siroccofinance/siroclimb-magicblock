@@ -50,7 +50,9 @@ const feeds = MARKETS.map((m) => ({ m, raw: 0, price: 0, ts: 0, hist: [], subs: 
 /// Open = inside a trading session (Pyth's schedule) and the price is fresh.
 const isOpen = (f) => f.ts > 0 && Date.now() / 1000 - f.ts <= MAX_PRICE_AGE && inSession(f.m.hours);
 const toUsd = (asset, raw) => raw * 10 ** MARKETS[asset].exponent;
+let polling = false;
 async function pollPrices() {
+  if (polling) return; polling = true;
   try {
     const accs = await er.getMultipleAccountsInfo(MARKETS.map((m) => m.feedKey));
     const now = Date.now();
@@ -63,9 +65,9 @@ async function pollPrices() {
       f.subs.forEach((cb) => cb({ price: f.price, ts: now }));
     });
     priceTick(now);
-  } catch (e) { log('prices', e.message); }
+  } catch (e) { log('prices', e.message); } finally { polling = false; }
 }
-setInterval(pollPrices, 250);
+setInterval(pollPrices, 200);   // the relay moves up to four times a second
 pollPrices();
 
 // The chart starts full: the last 90 s of every market, read back from its
