@@ -512,6 +512,14 @@ $('#share').onclick = async () => {
   if (!ended) return;
   sound.tick();
   const { text, url } = shareText();
+  // phones: the system share sheet takes the picture itself and the text (with the result's link when it is
+  // signed already) straight into the X app; called right away, while the tap still counts as a user gesture
+  const file = card && new File([card.blob], 'siroclimb.png', { type: 'image/png' });
+  if (file && matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    const u = link && link.r === ended && link.url ? link.url : url;
+    try { await navigator.share({ files: [file], text: `${text}\n${u}` }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
   // the hosted link carries the picture: open the post with it (a tab opened now, so no popup blocker,
   // pointed at X once the climb has settled and the link is signed)
   if (link && link.r === ended && (link.url || !api.mock)) {
@@ -526,12 +534,6 @@ $('#share').onclick = async () => {
     if (w) w.close();
   }
   const href = intent(text, url);
-  // phones: the system share sheet takes the picture and the text straight into the X app
-  const file = card && new File([card.blob], 'siroclimb.png', { type: 'image/png' });
-  if (file && matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: `${text}\n${url}` }); return; }
-    catch (e) { if (e.name === 'AbortError') return; }
-  }
   // desktop: the picture goes to the clipboard, X opens with the post written, one paste adds the picture
   let copied = false;
   if (card && navigator.clipboard && window.ClipboardItem) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': card.blob })]); copied = true; } catch {} }
