@@ -446,7 +446,8 @@ export function createEscalatorScene({ canvas, width, height, pixelRatio = 1, fr
     const big = Math.abs(n) >= TR.BIG;
     if (T.air) { if (uc >= xb + 0.2) T.handled = g1; }
     else if (dy > 0.02) {                                        // riser ahead: leave the tread just in time to clear it
-      const A = big ? 0.5 + 0.05 * Math.min(5, Math.abs(n)) : TR.HOP, v0 = Math.sqrt(2 * TR.G * (dy + A));
+      const A = big ? 0.5 + 0.05 * Math.min(8, Math.abs(n)) : TR.HOP + 0.05 * (Math.abs(n) - 1),   // the hop grows with the step
+            v0 = Math.sqrt(2 * TR.G * (dy + A));
       const tc = (v0 - Math.sqrt(Math.max(0, v0 * v0 - 2 * TR.G * (dy + 0.04)))) / TR.G;
       if (xb - (uc + RC * 0.7) <= Math.max(T.v, 0.15) * tc || uc + RC >= xb) {
         launch(T, v0, big, n, H(T, g1)); T.handled = g1; T.events.push({ t: T.t, n, big }); T.onStep?.(n, big);
