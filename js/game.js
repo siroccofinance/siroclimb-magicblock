@@ -2,7 +2,7 @@
 // The 3D scene is the hero's: in the lobby the belt loops; on start it brakes, the coin's box climbs one level
 // per leverage step; cash out tosses the coin (camera follows), a bust drops it.
 import * as api from './api.js';
-import { createEscalatorScene } from './sirocco-escalator-scene.js?v=10';
+import { createEscalatorScene } from './sirocco-escalator-scene.js?v=11';
 import { CARD, drawCard, loadLogo, toBlob } from './share-card.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -667,9 +667,13 @@ function stepSize(assetId) {
   const m = r.reduce((a, b) => a + b, 0) / r.length, sd = Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / r.length);
   return Math.max(1e-5, sd * 1.4);
 }
-// Every price change is a step, however small: up when it goes the player's way, down when it does not,
-// one step for a small move, two or three for a large one (in this market's typical moves, soft-capped).
-// Purely visual: the climb's value, the bust and the payout come from the chain.
+// Every price change is a step in its own direction (up when it goes the player's way), sized by the move in
+// this market's typical tick: an ordinary tick is one step, twice that four, three times seven, four or more
+// ten (a tall riser, a big jump). Up and back down by the same move draws the same height both ways, so the
+// stairs follow the sparkline's shape. Most prices move by their minimum increment, so a linear scale would
+// make every step alike. Purely visual: the climb's value, the bust and the payout come from the chain.
+const MAX_STEP = 10;
+const stepsFor = (size) => Math.max(1, Math.min(MAX_STEP, Math.round(3 * size - 2)));
 /// The typical size of one price change of this market (median of its recent non-zero moves).
 function typicalMove(assetId) {
   const h = api.history(assetId, 90), r = [];
@@ -683,9 +687,8 @@ function levelFrom(price) {
   if (!lvl.entry || !(price > 0)) return;
   if (!lvl.last) { lvl.last = price; return; }
   if (price === lvl.last) return;
-  // size in this market's typical moves: an ordinary tick is one step, two or three for an unusual one
-  const r = lvl.sign * Math.log(price / lvl.last), size = Math.abs(r) / (lvl.tick || lvl.q);
-  lvl.level += Math.sign(r) * (size >= 4 ? 3 : size >= 2 ? 2 : 1);
+  const r = lvl.sign * Math.log(price / lvl.last);
+  lvl.level += Math.sign(r) * stepsFor(Math.abs(r) / (lvl.tick || lvl.q));
   lvl.last = price;
 }
 function startTrack(r) {
