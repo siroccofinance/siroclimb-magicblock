@@ -4,12 +4,10 @@
 // one relay account per market on the rollup that one named key pushes prices
 // into (gasless). Gold is priced as XAUt (Tether Gold), which trades 24/7.
 //
-// Source, all week: the mid of Kraken's book (TSLAx/USD, NVDAx/USD, AAPLx/USD,
-// MSTRx/USD, XAUt/USD) averaged with the mid of Hyperliquid's trade.xyz perp
-// (xyz:TSLA, NVDA, AAPL, MSTR, GOLD: they trade 24/7 and keep ticking when a
-// Kraken book stands still, on US holidays for instance), so a tick on either
-// venue moves the price. When only Kraken answers, or the two are more than
-// 1.5 % apart, Kraken's mid alone (logged). A market may also
+// Source, all week: the mid of Hyperliquid's trade.xyz perp (xyz:TSLA, NVDA, AAPL,
+// MSTR, GOLD), which trades 24/7 and keeps ticking when the xStock books stand still
+// (US holidays, nights). Kraken's mid (TSLAx/USD, NVDAx/USD, AAPLx/USD, MSTRx/USD,
+// XAUt/USD) only when Hyperliquid fails or has no price for the market (logged). A market may also
 // take Jupiter's price of its Solana mint (`source: 'jupiter'`), eased in. The
 // other venue is the sanity check: a price more than 1.5 % away from it (from
 // Kraken's bid-ask range for a Jupiter-priced market) is not pushed, and neither
@@ -26,6 +24,7 @@ import { quotesPda, relayPda } from './pdas.js';
 import { send } from './tx.js';
 
 const MAX_GAP = 0.015;
+const HL_GAP = 0.03;   // Hyperliquid's perp vs Jupiter's token price: a looser band (a perp is not the token)
 const getJson = (u) => fetch(u, { signal: AbortSignal.timeout(1500) }).then((r) => r.json());
 
 async function kraken() {
@@ -69,12 +68,12 @@ export async function fetchQuotes() {
       if (!jq || (kq && (jq < kq.bid * (1 - MAX_GAP) || jq > kq.ask * (1 + MAX_GAP)))) continue;
       price = jq; src = 'jupiter';
     } else {
-      if (!kq || (jq && Math.abs(kq.mid / jq - 1) > MAX_GAP)) continue;
       const h = hl[a];
-      if (h && Math.abs(h / kq.mid - 1) <= MAX_GAP) { price = (kq.mid + h) / 2; src = 'kraken+hl'; }
+      if (h && !(jq && Math.abs(h / jq - 1) > HL_GAP)) { price = h; src = 'hl'; }
       else {
+        if (!kq || (jq && Math.abs(kq.mid / jq - 1) > MAX_GAP)) continue;
         price = kq.mid; src = 'kraken';
-        console.log(`[relay] ${MARKETS[a].id}: Kraken alone (${h ? `Hyperliquid ${h} is ${((h / kq.mid - 1) * 100).toFixed(2)} % away` : 'no Hyperliquid mid'})`);
+        console.log(`[relay] ${MARKETS[a].id}: Kraken fallback (${h ? `Hyperliquid ${h} is ${((h / jq - 1) * 100).toFixed(2)} % from Jupiter` : 'no Hyperliquid mid'})`);
       }
     }
     out[a] = { price, raw: Math.round(price / 10 ** MARKETS[a].exponent), ts, src };

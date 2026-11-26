@@ -41,8 +41,8 @@ export const PRICE_ORACLE_PROGRAM_ID = new PublicKey('PriCems5tHihc6UDXDjzjeawom
 /// Every market is priced on the rollup by the program's relay accounts
 /// (`["relay", asset]`), kept fresh with the asset's own 24/7 token market
 /// (js/chain/relay.js) by /api/relay, its cron and the keeper: the mid of
-/// Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold) averaged with Hyperliquid's trade.xyz
-/// 24/7 perp (`hl`) when the two agree within 1.5 %, or with
+/// Hyperliquid's trade.xyz 24/7 perp (`hl`), Kraken's book (`relay`: the xStock pairs, XAUt/USD for gold)
+/// as the fallback, or with
 /// `source: 'jupiter'`, Jupiter's price of the Solana mint (`mainnetMint`).
 /// The other venue is the sanity check. MagicBlock's rollups carry no xStock
 /// feed, Pyth's equity feeds stand still outside US hours and Pyth's XAU/USD
