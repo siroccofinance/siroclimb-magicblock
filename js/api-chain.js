@@ -157,7 +157,8 @@ async function fundSol(min) {
   if (have >= min) return;
   try {
     const r = await fetch('api/faucet', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: account() }) });
-    if (r.ok) { for (let i = 0; i < 30; i++) { await sleep(700); if ((await base.getBalance(wallet.publicKey)) >= min) return; } }
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && (j.sig || j.skipped === 'enough SOL already')) { for (let i = 0; i < 30; i++) { await sleep(700); if ((await base.getBalance(wallet.publicKey)) >= min) return; } }
   } catch {}
   try { await base.requestAirdrop(wallet.publicKey, 1e9); for (let i = 0; i < 30; i++) { await sleep(700); if ((await base.getBalance(wallet.publicKey)) >= min) return; } } catch {}
   throw new Error(`This wallet needs a little devnet SOL (${(min / 1e9).toFixed(2)}). Get some at faucet.solana.com, then try again`);

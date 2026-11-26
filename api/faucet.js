@@ -1,7 +1,8 @@
 // POST /api/faucet { address }: a little devnet SOL for a wallet that has none,
 // so a new player (or the built-in burner) can approve their first transaction.
 // Needs FAUCET_SECRET_KEY (JSON array, server-side only). Refuses wallets that
-// already hold SOL and wallets it funded in the last 24 h (checked from the
+// already hold SOL and wallets it funded in the last 24 h (answered 200 with `skipped`, so the page
+// falls back to the public airdrop without an error in the console) (checked from the
 // faucet's own recent transactions, so it holds across serverless instances).
 import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
 import { baseConnection, readJson } from './_lib.js';
@@ -20,7 +21,7 @@ export default async function handler(req, res) {
     const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0];
     const hits = (perIp.get(ip) || []).filter((t) => Date.now() - t < 3600e3);
     const local = /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(ip);
-    if (hits.length >= 5 && !local) return out(429, { error: 'too many requests' });
+    if (hits.length >= 10 && !local) return out(200, { skipped: 'too many requests' });
     perIp.set(ip, [...hits, Date.now()]);
     const { address } = await readJson(req);
     const to = new PublicKey(address);
@@ -32,12 +33,12 @@ export default async function handler(req, res) {
     for (const s of recent.filter((x) => (x.blockTime || 0) > day).slice(0, 60)) {
       const t = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 0 }).catch(() => null);
       const keys = t ? t.transaction.message.staticAccountKeys || t.transaction.message.accountKeys : [];
-      if (keys.some((k) => k.equals(to))) return out(429, { error: 'funded in the last 24 h' });
+      if (keys.some((k) => k.equals(to))) return out(200, { skipped: 'funded in the last 24 h' });
     }
     // a faucet running low still gives what it can (enough for onboarding), rather than failing the whole transfer
     const left = (await conn.getBalance(faucet.publicKey)) - 0.01e9;
     const lamports = Math.min(AMOUNT, left);
-    if (lamports < ENOUGH) return out(503, { error: 'faucet empty' });
+    if (lamports < ENOUGH) return out(200, { skipped: 'faucet empty' });
     const sig = await send(conn, [SystemProgram.transfer({ fromPubkey: faucet.publicKey, toPubkey: to, lamports })], [faucet], { label: 'faucet' });
     out(200, { sig, lamports });
   } catch (e) {
