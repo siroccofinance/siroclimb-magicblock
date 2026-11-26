@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return out(405, { error: 'POST only' });
     const { player } = await readJson(req);
     const token = sign(await settledClimb(player)), o = originOf(req);
-    out(200, { url: `${o}/s/${token}`, image: `${o}/api/card?t=${token}` });
+    out(200, { url: `${o}/s/${token}`, image: `${o}/c/${token}.png` });
   } catch (e) {
     // still settling: 202, the client asks again (not an error)
     out(e.code === 409 ? 202 : e.code || 400, { pending: e.code === 409, error: String(e.message || e).slice(0, 200) });
